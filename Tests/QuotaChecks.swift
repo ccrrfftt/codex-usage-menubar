@@ -23,6 +23,12 @@ struct QuotaChecks {
         check(expired.remaining == 12 && resetCountdown(expired.resetDate, now: Date(timeIntervalSince1970: 200)) == "等待额度更新", "elapsed reset does not invent a new allowance")
         let noMain = try decode(#"{"rateLimits":{"primary":{"usedPercent":1}},"rateLimitsByLimitId":{"spark":{"limitId":"spark","primary":{"usedPercent":0}}}}"#)
         check(noMain.main == nil, "no substitution of unrelated or legacy quota")
-        print("8 quota checks passed.")
+        let cards = try decode(#"{"rateLimitResetCredits":{"availableCount":3,"credits":[{"id":"example"}]}}"#)
+        check(cards.resetCardCount == 3, "reset count uses availableCount, not the detail list length")
+        let unknownCards = try decode(#"{"rateLimitResetCredits":null}"#)
+        check(unknownCards.resetCardCount == nil, "unknown reset count stays unavailable")
+        let zeroCards = try decode(#"{"rateLimitResetCredits":{"availableCount":0}}"#)
+        check(zeroCards.resetCardCount == 0, "zero reset cards is a known value")
+        print("11 quota checks passed.")
     }
 }

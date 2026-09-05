@@ -41,9 +41,19 @@ struct QuotaBucket: Decodable, Sendable, Identifiable {
     }
 }
 
+struct ResetCreditBalance: Decodable, Sendable {
+    let availableCount: Int?
+}
+
 struct QuotaSnapshot: Decodable, Sendable {
     let rateLimits: QuotaBucket?
     let rateLimitsByLimitId: [String: QuotaBucket]?
+    let rateLimitResetCredits: ResetCreditBalance?
+
+    var resetCardCount: Int? {
+        guard let count = rateLimitResetCredits?.availableCount, count >= 0 else { return nil }
+        return count
+    }
 
     var buckets: [QuotaBucket] {
         if let mapped = rateLimitsByLimitId, !mapped.isEmpty {
