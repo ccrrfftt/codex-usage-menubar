@@ -38,22 +38,21 @@ struct QuotaChecks {
         check(unknownCards.resetCards == nil, "unavailable card detail is not an empty fetched list")
         let ac = EnergyState()
         var battery = ac; battery.onBattery = true
-        var low = battery; low.lowPower = true
-        let closed: (EnergyState) -> TimeInterval? = { EnergyPolicy.refreshInterval(menuVisible: false, requestedInterval: 30, state: $0) }
-        check(closed(ac) == 120, "closed menu on AC queries every two minutes")
-        check(closed(battery) == 300, "closed menu on battery queries every five minutes")
-        check(closed(low) == 600, "closed menu in low power queries every ten minutes")
-        check(EnergyPolicy.refreshInterval(menuVisible: true, requestedInterval: 30, state: ac) == 30, "open menu keeps requested freshness")
-        check(EnergyPolicy.refreshInterval(menuVisible: true, requestedInterval: 15, state: low) == 60, "low power mode limits foreground polling")
+        let cadence: (EnergyState) -> TimeInterval? = { EnergyPolicy.refreshInterval(state: $0) }
+        check(cadence(ac) == 60, "AC queries every minute independently of the panel")
+        check(cadence(battery) == 300, "battery queries every five minutes independently of the panel")
+        check(EnergyPolicy.refreshInterval(state: ac, failures: 1) == 120, "AC query failure doubles retry delay")
+        check(EnergyPolicy.refreshInterval(state: battery, failures: 1) == 600, "battery query failure doubles retry delay")
         var asleep = ac; asleep.systemSleeping = true
-        check(closed(asleep) == nil, "system sleep stops query scheduling")
+        check(cadence(asleep) == nil, "system sleep stops query scheduling")
         asleep = ac; asleep.displaySleeping = true
-        check(closed(asleep) == nil, "screen sleep stops query scheduling")
+        check(cadence(asleep) == nil, "screen sleep stops query scheduling")
         var offline = ac; offline.networkAvailable = false
-        check(closed(offline) == nil, "offline state schedules no queries")
+        check(cadence(offline) == nil, "offline state schedules no queries")
         var inactive = ac; inactive.sessionInactive = true
-        check(closed(inactive) == nil, "inactive user session schedules no queries")
-        check(EnergyPolicy.refreshInterval(menuVisible: false, requestedInterval: 30, state: ac, failures: 10) == 1800, "repeated failures back off to thirty minutes")
+        check(cadence(inactive) == nil, "inactive user session schedules no queries")
+        check(EnergyPolicy.refreshInterval(state: ac, failures: 10) == 1800, "AC failures back off to thirty minutes")
+        check(EnergyPolicy.refreshInterval(state: battery, failures: 10) == 1800, "battery failures back off to thirty minutes")
         check(EnergyPolicy.timerTolerance(interval: 300) == 30, "timer coalescing tolerance is applied")
         print("\(checked) checks passed.")
     }

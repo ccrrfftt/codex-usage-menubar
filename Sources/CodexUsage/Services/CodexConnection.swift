@@ -23,10 +23,10 @@ final class CodexConnection: @unchecked Sendable {
     private var buffer = Data()
     private var serial = 0
 
-    func read(keepAlive: Bool = false) async throws -> QuotaSnapshot {
+    func read() async throws -> QuotaSnapshot {
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
-                defer { if !keepAlive { self.close() } }
+                defer { self.close() }
                 do {
                     if self.process?.isRunning != true { try self.start() }
                     let result = try self.call("account/rateLimits/read")
