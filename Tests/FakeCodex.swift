@@ -4,6 +4,7 @@ import Darwin
 // Local subprocess fixture. It never contacts Codex or the network.
 let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 let mode = (try? String(contentsOf: root.appendingPathComponent("mode"), encoding: .utf8)) ?? "normal"
+if mode == "stubborn" { signal(SIGTERM, SIG_IGN) }
 try String(getpid()).write(to: root.appendingPathComponent("pid"), atomically: true, encoding: .utf8)
 var requests = ""
 while let line = readLine() {
@@ -13,7 +14,11 @@ while let line = readLine() {
     try requests.write(to: root.appendingPathComponent("requests"), atomically: true, encoding: .utf8)
     guard let id = object["id"] as? Int else { continue }
     if mode == "slow" { usleep(250_000) }
-    if method == "account/rateLimits/read" && mode == "hang" { sleep(30) }
+    if method == "account/rateLimits/read" && ["hang", "stubborn"].contains(mode) { sleep(30) }
+    if method == "account/rateLimits/read" && mode == "unrelated" {
+        print(#"{"id":999,"result":"an unrelated response"}"#)
+        print(#"{"id":"server-request","method":"unrelated","params":{}}"#)
+    }
     if method == "account/rateLimits/read" && mode == "malformed" {
         print("invalid JSON")
         fflush(stdout)

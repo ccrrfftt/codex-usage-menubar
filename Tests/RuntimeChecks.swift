@@ -22,6 +22,22 @@ private actor ControlledReader: QuotaReading {
 @MainActor
 private final class TestClock { var value: TimeInterval = 1000 }
 
+@MainActor
+private final class TestScheduler: RefreshScheduling {
+    private(set) var delay: TimeInterval?
+    private var action: (@MainActor () -> Void)?
+    func schedule(after delay: TimeInterval, action: @escaping @MainActor () -> Void) {
+        self.delay = delay
+        self.action = action
+    }
+    func cancel() { delay = nil; action = nil }
+    func fire() {
+        let pending = action
+        cancel()
+        pending?()
+    }
+}
+
 @main @MainActor
 struct RuntimeChecks {
     private static var checked = 0
@@ -153,11 +169,65 @@ struct RuntimeChecks {
         do { _ = try await CodexConnection(executable: executable, runtime: denied).read() }
         catch QuotaError.account { safeError = true }
         check(safeError, "upstream error details do not escape into the UI")
+        let unrelated = try directory("unrelated", mode: "unrelated")
+        check(try await CodexConnection(executable: executable, runtime: unrelated).read().main?.headline?.remaining == 35,
+              "unrelated response shapes and string IDs are ignored before decoding their payload")
+        let stubborn = try directory("stubborn", mode: "stubborn")
+        let stubbornRead = Task { try await CodexConnection(executable: executable, runtime: stubborn).read() }
+        try await waitFor { contents(stubborn.appendingPathComponent("requests")).contains("account/rateLimits/read") }
+        let stubbornPID = Int32(contents(stubborn.appendingPathComponent("pid")))!
+        let cleanupStarted = ProcessInfo.processInfo.systemUptime
+        stubbornRead.cancel()
+        var stubbornCancelled = false
+        do { _ = try await stubbornRead.value } catch is CancellationError { stubbornCancelled = true }
+        let cleanupElapsed = ProcessInfo.processInfo.systemUptime - cleanupStarted
+        let childExited = kill(stubbornPID, 0) != 0
+        if !childExited { kill(stubbornPID, SIGKILL) } // Cleanup before reporting a failed assertion.
+        check(stubbornCancelled && childExited && cleanupElapsed < 1.5,
+              "a child ignoring SIGTERM is gone before cancellation completes")
+        print(String(format: "Unresponsive child cleanup: %.3f seconds", cleanupElapsed))
         print(String(format: "Blocked read cancellation: %.3f seconds; file descriptors: %d -> %d", elapsed, descriptorsBefore, descriptorsAfter))
+    }
+
+    static func checkScheduling() async throws {
+        let reader = ControlledReader(), clock = TestClock(), scheduler = TestScheduler()
+        let store = UsageStore(connection: reader, monitor: nil, scheduler: scheduler,
+                               startImmediately: false, uptime: { clock.value })
+        defer { store.stop() }
+        store.refresh()
+        try await waitFor { await reader.requests == 1 }
+        await reader.resolve(0, .success(try snapshot(used: 10)))
+        try await waitFor { !store.state.isRefreshing }
+        check(scheduler.delay == 60, "store schedules the actual AC timer for sixty seconds")
+        var battery = EnergyState(); battery.onBattery = true
+        store.updateSystemState(battery)
+        check(scheduler.delay == 300, "power change reschedules the actual timer for five minutes")
+        clock.value += 4
+        store.refresh()
+        check(scheduler.delay == 1, "rapid manual refresh keeps a short cooldown")
+        store.updateSystemState(EnergyState())
+        check(scheduler.delay == 1, "power events cannot postpone an explicitly requested refresh")
+        clock.value += 1
+        scheduler.fire()
+        try await waitFor { await reader.requests == 2 }
+        check(await reader.requests == 2, "cooldown fires exactly one pending refresh")
+        var offline = EnergyState(); offline.networkAvailable = false
+        store.updateSystemState(offline)
+        check(scheduler.delay == nil, "offline transition cancels the actual timer")
+        await reader.resolve(1, .success(try snapshot(used: 99)))
+        clock.value += 6
+        store.updateSystemState(EnergyState())
+        try await waitFor { await reader.requests == 3 }
+        let cleanup = store.stop()
+        await reader.resolve(2, .success(try snapshot(used: 99)))
+        await cleanup?.value
+        check(cleanup != nil && scheduler.delay == nil && store.state.remaining == 90,
+              "quit can await cancelled work without accepting its late result")
     }
 
     static func main() async throws {
         try await checkStore()
+        try await checkScheduling()
         try await checkProcess()
         print("\(checked) runtime checks passed.")
     }
