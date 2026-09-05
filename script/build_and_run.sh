@@ -30,17 +30,26 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 <key>CFBundleDisplayName</key><string>Codex 用量</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleIconFile</key><string>CodexUsage.icns</string>
-<key>CFBundleShortVersionString</key><string>1.2.0</string>
-<key>CFBundleVersion</key><string>3</string>
+<key>CFBundleShortVersionString</key><string>1.3.0</string>
+<key>CFBundleVersion</key><string>4</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
-/usr/bin/xattr -d com.apple.FinderInfo "$APP_BUNDLE" 2>/dev/null || true
-/usr/bin/codesign --force --sign - "$APP_BUNDLE"
-/usr/bin/codesign --verify --deep --strict "$APP_BUNDLE"
+# File Provider can add FinderInfo just after a bundle is updated in Documents.
+# Retry this specific generated-bundle cleanup; never remove quarantine metadata.
+SIGNED=0
+for attempt in 1 2 3; do
+    /usr/bin/xattr -d com.apple.FinderInfo "$APP_BUNDLE" 2>/dev/null || true
+    if /usr/bin/codesign --force --sign - "$APP_BUNDLE" && /usr/bin/codesign --verify --deep --strict "$APP_BUNDLE"; then
+        SIGNED=1
+        break
+    fi
+    sleep 0.3
+done
+[[ "$SIGNED" == 1 ]] || exit 1
 case "$MODE" in
     --build-only) ;;
     run) /usr/bin/open -n "$APP_BUNDLE" ;;

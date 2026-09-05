@@ -18,11 +18,13 @@ struct UsageMenuView: View {
             quotaSummary
             HStack(spacing: 5) {
                 Image(systemName: "ticket").foregroundStyle(.secondary)
-                Text("重置卡").foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Text("重置卡到期时间").foregroundStyle(.secondary)
                 Spacer()
                 Text(store.snapshot?.resetCardCount.map { "\($0) 张" } ?? "—")
                     .fontWeight(.medium).monospacedDigit()
             }.font(.caption)
+            resetCardDetails
             if let error = store.lastError {
                 Text(error).font(.caption2).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -39,15 +41,17 @@ struct UsageMenuView: View {
                     Label("刷新", systemImage: "arrow.clockwise")
                 }.disabled(store.isRefreshing)
                 Spacer(minLength: 4)
-                Text("自动更新").font(.caption2).foregroundStyle(.secondary)
+                Text("查看时").font(.caption2).foregroundStyle(.secondary)
                 Picker("自动更新间隔", selection: $store.interval) {
                     Text("15 秒").tag(15)
                     Text("30 秒").tag(30)
                     Text("60 秒").tag(60)
                 }.labelsHidden().frame(width: 71)
+                    .help(store.energyDescription)
             }.controlSize(.small)
             HStack {
                 Text(updateLabel).font(.caption2).foregroundStyle(.secondary)
+                    .help(store.energyDescription)
                 Spacer()
                 Button("退出应用") { store.stop(); NSApplication.shared.terminate(nil) }
                     .font(.caption2).buttonStyle(.plain)
@@ -68,6 +72,32 @@ struct UsageMenuView: View {
         guard let updated = store.updatedAt else { return "尚未同步" }
         let time = updated.formatted(date: .omitted, time: .standard)
         return store.stale ? "旧数据 · \(time)" : "更新于 \(time)"
+    }
+
+    @ViewBuilder
+    private var resetCardDetails: some View {
+        if let cards = store.snapshot?.resetCards, !cards.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(Array(cards.enumerated()), id: \.offset) { index, card in
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("第 \(index + 1) 张").foregroundStyle(.secondary)
+                        Spacer(minLength: 6)
+                        if let expires = card.expirationDate {
+                            Text(expires.formatted(.dateTime.year().month().day().hour().minute()))
+                                .foregroundStyle(expires <= store.now ? Color.orange : Color.secondary)
+                        } else {
+                            Text("未提供到期时间").foregroundStyle(.secondary)
+                        }
+                    }.font(.caption2)
+                }
+                if let count = store.snapshot?.resetCardCount, cards.count < count {
+                    Text("已返回 \(cards.count)/\(count) 张卡片的到期明细")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+        } else if (store.snapshot?.resetCardCount ?? 0) > 0 {
+            Text("暂未返回到期明细").font(.caption2).foregroundStyle(.secondary)
+        }
     }
 
     private func otherQuotas(_ buckets: [QuotaBucket]) -> some View {

@@ -23,9 +23,10 @@ final class CodexConnection: @unchecked Sendable {
     private var buffer = Data()
     private var serial = 0
 
-    func read() async throws -> QuotaSnapshot {
+    func read(keepAlive: Bool = false) async throws -> QuotaSnapshot {
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
+                defer { if !keepAlive { self.close() } }
                 do {
                     if self.process?.isRunning != true { try self.start() }
                     let result = try self.call("account/rateLimits/read")
@@ -111,7 +112,8 @@ final class CodexConnection: @unchecked Sendable {
             guard remaining > 0 else { throw QuotaError.timedOut }
             guard let output, process?.isRunning == true else { throw QuotaError.disconnected }
             var descriptor = pollfd(fd: output.fileDescriptor, events: Int16(POLLIN), revents: 0)
-            let ready = Darwin.poll(&descriptor, 1, Int32(min(1000, remaining * 1000)))
+            // Wait for data or the full deadline rather than waking every second.
+            let ready = Darwin.poll(&descriptor, 1, Int32(max(1, remaining * 1000)))
             if ready < 0 {
                 if errno == EINTR { continue }
                 throw QuotaError.disconnected
