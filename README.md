@@ -2,13 +2,13 @@
 
 轻量的 macOS 菜单栏应用，显示 Codex 账户的剩余额度。
 
-菜单栏仅显示 **Codex 图标 + 百分比**。文字使用系统菜单栏字体与默认字号，图标和文字由原生状态栏按钮统一排版。默认每 30 秒自动刷新，点击图标可查看重置时间、其他额度、刷新频率和暂停状态。
+菜单栏仅显示 **Codex 图标 + 百分比**。文字使用系统菜单栏字体，字号比系统默认小 1 pt；图标和文字由原生状态栏按钮统一排版。默认每 30 秒自动刷新，点击图标可查看重置时间、重置卡数量、其他额度和刷新频率。
 
 ## 打开、关闭、删除
 
 1. **安装和打开**：从本仓库 Releases 下载 `Codex-Usage-macOS-arm64.zip`，解压后把 `Codex Usage.app` 拖进“应用程序”，双击打开。应用会展开用量面板，并常驻屏幕右上角。
 2. **关闭**：点击菜单栏图标，选择“退出应用”。没有 Dock 图标；关闭弹出面板会继续监测，选择“退出应用”才结束程序。
-3. **删除**：先退出，在 Finder 中把 `Codex Usage.app` 移到废纸篓。菜单里的“在访达中显示应用”可直接定位安装位置。
+3. **删除**：先退出，在 Finder 中把 `Codex Usage.app` 移到废纸篓。
 
 本应用不安装后台守护进程，不自动设置开机启动。再次双击应用可以重新打开面板。
 
@@ -25,16 +25,18 @@
 - 优先读取 `rateLimitsByLimitId`；不存在时兼容旧的 `rateLimits`。
 - 剩余比例按 `100 - usedPercent` 计算，限制在 0–100%。缺失数据展示为 `—`。
 - 主数字显示 Codex 主额度中剩余比例最低的周期；周期长度来自服务返回值。
-- 支持 15 / 30 / 60 秒刷新、立即刷新和暂停。休眠唤醒后重新同步。
+- 支持 15 / 30 / 60 秒刷新和立即刷新。休眠唤醒后重新同步。
 - 断网保留最近成功数据，在百分比后显示提示点，详情中明确提示旧数据。
 - 重置时间已过时显示“等待额度更新”，不会自行假设已经恢复为 100%。
+
+“其他额度”整行都能点击展开和折叠。面板采用紧凑布局，顶部固定，展开内容向下增加，取消了窗口缩放动画。
 
 ## 从源码构建
 
 安装支持 Swift 6 的 Xcode Command Line Tools。项目没有第三方 Swift 包依赖。
 
 ```sh
-./script/check.sh                  # 8 项额度逻辑检查，无需完整 Xcode
+./script/check.sh                  # 11 项额度逻辑检查，无需完整 Xcode
 ./script/build_and_run.sh          # 构建并运行
 ./script/build_and_run.sh --build-only
 ./script/package.sh                # 在 dist/ 生成 app、ZIP 和 SHA-256
@@ -47,7 +49,7 @@
 - `App/`：应用入口、启动和退出生命周期。
 - `Services/StatusItemController.swift`：原生菜单栏按钮和 SwiftUI 弹出面板之间的边界。
 - `Services/CodexConnection.swift`：串行管理只读 Codex app-server 连接。
-- `Stores/UsageStore.swift`：刷新、暂停、错误和数据时效状态。
+- `Stores/UsageStore.swift`：刷新、错误和数据时效状态。
 - `Models/`：额度模型与展示规则。
 - `Views/`：用量详情界面。
 

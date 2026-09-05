@@ -15,8 +15,9 @@ final class StatusItemController: NSObject {
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         if let button = item.button {
-            // Match the system menu-bar font role; never inherit a SwiftUI body font.
-            button.font = NSFont.menuBarFont(ofSize: 0)
+            // Keep the system menu-bar face, one point smaller than its default size.
+            let defaultSize = NSFont.menuBarFont(ofSize: 0).pointSize
+            button.font = NSFont.menuBarFont(ofSize: max(10, defaultSize - 1))
             button.imagePosition = .imageLeading
             button.imageScaling = .scaleProportionallyDown
             button.alignment = .center
@@ -33,7 +34,9 @@ final class StatusItemController: NSObject {
         content.sizingOptions = [.preferredContentSize]
         popover.contentViewController = content
         popover.behavior = .transient
-        popover.animates = true
+        // Resize immediately below the status-item anchor; do not recenter the
+        // SwiftUI content through an animated intermediate window height.
+        popover.animates = false
         updateButton()
         observation = store.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async { self?.updateButton() }

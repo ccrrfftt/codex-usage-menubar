@@ -8,7 +8,6 @@ final class UsageStore: ObservableObject {
     @Published private(set) var updatedAt: Date?
     @Published private(set) var lastError: String?
     @Published private(set) var isRefreshing = false
-    @Published private(set) var paused = false
     @Published var interval = 30 {
         didSet { restartTimer() }
     }
@@ -28,7 +27,6 @@ final class UsageStore: ObservableObject {
     }
     var status: String {
         if isRefreshing { return "正在同步…" }
-        if paused { return "已暂停自动更新" }
         if stale { return updatedAt == nil ? "等待连接" : "当前显示上次数据" }
         return "自动同步中"
     }
@@ -45,7 +43,7 @@ final class UsageStore: ObservableObject {
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                guard let self, !self.paused else { return }
+                guard let self else { return }
                 await self.refresh()
             }
         }
@@ -71,12 +69,6 @@ final class UsageStore: ObservableObject {
         }
     }
 
-    func togglePause() {
-        paused.toggle()
-        restartTimer()
-        if !paused { Task { await refresh() } }
-    }
-
     func stop() {
         polling?.cancel()
         clock?.cancel()
@@ -86,13 +78,12 @@ final class UsageStore: ObservableObject {
 
     private func restartTimer() {
         polling?.cancel()
-        guard !paused else { return }
         polling = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
                 let delay = min(120, Double(self.interval) * pow(2, Double(min(self.failures, 2))))
                 do { try await Task.sleep(for: .seconds(delay)) } catch { return }
-                guard !Task.isCancelled, !self.paused else { return }
+                guard !Task.isCancelled else { return }
                 await self.refresh()
             }
         }
