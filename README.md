@@ -43,6 +43,9 @@
 - 删除原来每 5 秒运行的界面时钟；显示时间在查询、打开菜单和系统状态变化时更新。
 - 只保留一个带时间容差的一次性查询定时器，允许系统合并唤醒。
 - 每次查询结束后释放 Codex 查询子进程，菜单展开时也不保持闲置连接。
+- 休眠、离线或退出会取消正在等待的查询；握手和查询共用一个 25 秒总超时。
+- 每次查询仅在开始和完成时发布界面状态；菜单栏值未变化时跳过更新。
+- 重置卡排序和额度分组只在收到新数据时计算。发布包使用 Release 优化构建。
 - 反复失败时逐步延长重试，最长 30 分钟；断网期间不定时重试。
 - 不保持系统唤醒，不禁用 App Nap，不更改 macOS 的电池设置。
 
@@ -55,13 +58,13 @@
 安装支持 Swift 6 的 Xcode Command Line Tools。项目没有第三方 Swift 包依赖。
 
 ```sh
-./script/check.sh                  # 26 项额度与节能策略检查，无需完整 Xcode
+./script/check.sh                  # 30 项模型检查 + 18 项运行检查，无需完整 Xcode
 ./script/build_and_run.sh          # 构建并运行
 ./script/build_and_run.sh --build-only
-./script/package.sh                # 在 dist/ 生成 app、ZIP 和 SHA-256
+./script/package.sh                # 以 Release 构建，在 dist/ 生成 app、ZIP 和 SHA-256
 ```
 
-构建目录为 `.build/local`，也可以用 `CODEX_USAGE_BUILD_ROOT` 指定其他位置。Codex 项目里的 Run 动作指向同一个构建入口。
+构建目录为 `.build/local`，也可以用 `CODEX_USAGE_BUILD_ROOT` 指定其他位置。日常构建默认为 Debug，可用 `CODEX_USAGE_CONFIGURATION=release` 覆盖；打包始终使用 Release。Codex 项目里的 Run 动作指向同一个构建入口。
 
 ## 结构
 
@@ -70,9 +73,12 @@
 - `Services/CodexConnection.swift`：串行管理只读 Codex app-server 连接。
 - `Stores/UsageStore.swift`：刷新、错误和数据时效状态。
 - `Models/`：额度模型与展示规则。
-- `Views/`：用量详情界面。
+- `Models/UsageState.swift`：一次发布的界面状态和去重后的菜单栏数据。
+- `Views/`：主布局，以及额度、重置卡和其他额度三个独立视图。
 
 上述代码目录均位于 `Sources/CodexUsage/`。
+
+运行检查使用本地模拟查询进程，覆盖取消、超时、重连、旧结果丢弃和资源释放，不连接真实账户。设计审查与测量边界见 [REVIEW.md](REVIEW.md)。
 
 ## 隐私与范围
 

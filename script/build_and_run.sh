@@ -3,17 +3,17 @@ set -euo pipefail
 MODE="${1:-run}"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="CodexUsage"
-BUNDLE_ID="local.codexusage.menubar"
 APP_BUNDLE="$PROJECT_ROOT/dist/Codex Usage.app"
 TASK_BUILD_ROOT="${CODEX_USAGE_BUILD_ROOT:-$PROJECT_ROOT/.build/local}"
+TASK_CONFIGURATION="${CODEX_USAGE_CONFIGURATION:-debug}"
 cd "$PROJECT_ROOT"
 if [[ "$MODE" != "--build-only" ]]; then
     pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 fi
 mkdir -p "$TASK_BUILD_ROOT/module-cache"
 export CLANG_MODULE_CACHE_PATH="$TASK_BUILD_ROOT/module-cache"
-swift build --scratch-path "$TASK_BUILD_ROOT/swift" --disable-sandbox
-BUILD_BIN="$(swift build --scratch-path "$TASK_BUILD_ROOT/swift" --show-bin-path --disable-sandbox)/$APP_NAME"
+swift build --configuration "$TASK_CONFIGURATION" --scratch-path "$TASK_BUILD_ROOT/swift" --disable-sandbox
+BUILD_BIN="$(swift build --configuration "$TASK_CONFIGURATION" --scratch-path "$TASK_BUILD_ROOT/swift" --show-bin-path --disable-sandbox)/$APP_NAME"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
 cp "$BUILD_BIN" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
@@ -30,8 +30,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 <key>CFBundleDisplayName</key><string>Codex 用量</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleIconFile</key><string>CodexUsage.icns</string>
-<key>CFBundleShortVersionString</key><string>1.3.1</string>
-<key>CFBundleVersion</key><string>5</string>
+<key>CFBundleShortVersionString</key><string>1.4.0</string>
+<key>CFBundleVersion</key><string>6</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>LSUIElement</key><true/>

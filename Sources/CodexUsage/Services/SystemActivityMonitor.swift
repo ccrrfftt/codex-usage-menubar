@@ -16,8 +16,8 @@ final class SystemActivityMonitor {
     init() {
         updatePower()
         let workspace = NSWorkspace.shared.notificationCenter
-        observe(workspace, .willSleep) { $0.systemSleeping = true }
-        observe(workspace, .didWake) { $0.systemSleeping = false }
+        observe(workspace, NSWorkspace.willSleepNotification) { $0.systemSleeping = true }
+        observe(workspace, NSWorkspace.didWakeNotification) { $0.systemSleeping = false }
         observe(workspace, NSWorkspace.screensDidSleepNotification) { $0.displaySleeping = true }
         observe(workspace, NSWorkspace.screensDidWakeNotification) { $0.displaySleeping = false }
         observe(workspace, NSWorkspace.sessionDidResignActiveNotification) { $0.sessionInactive = true }
@@ -72,9 +72,4 @@ final class SystemActivityMonitor {
             }
         }
     }
-}
-
-private extension Notification.Name {
-    static let willSleep = NSWorkspace.willSleepNotification
-    static let didWake = NSWorkspace.didWakeNotification
 }

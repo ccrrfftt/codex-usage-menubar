@@ -3,6 +3,9 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ICON_ROOT="${1:-$PROJECT_ROOT/.build/icons}"
 ICON_SET="$ICON_ROOT/CodexUsage.iconset"
+if [[ "$ICON_ROOT/CodexUsage.icns" -nt "$PROJECT_ROOT/Assets/AppIcon.png" && "$ICON_ROOT/CodexUsage.icns" -nt "${BASH_SOURCE[0]}" ]]; then
+    exit 0
+fi
 mkdir -p "$ICON_SET"
 for size in 16 32 128 256 512; do
     /usr/bin/sips -z "$size" "$size" "$PROJECT_ROOT/Assets/AppIcon.png" --out "$ICON_SET/icon_${size}x${size}.png" >/dev/null
