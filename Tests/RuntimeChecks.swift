@@ -63,7 +63,7 @@ struct RuntimeChecks {
 
     static func checkStore() async throws {
         let reader = ControlledReader(), clock = TestClock()
-        let store = UsageStore(connection: reader, monitor: nil, startImmediately: false, uptime: { clock.value })
+        let store = UsageStore(connection: reader, monitor: nil, preferences: nil, startImmediately: false, uptime: { clock.value })
         defer { store.stop() }
         var publications = 0, menuUpdates = 0
         let observation = store.$state.dropFirst().sink { _ in publications += 1 }
@@ -191,7 +191,7 @@ struct RuntimeChecks {
 
     static func checkScheduling() async throws {
         let reader = ControlledReader(), clock = TestClock(), scheduler = TestScheduler()
-        let store = UsageStore(connection: reader, monitor: nil, scheduler: scheduler,
+        let store = UsageStore(connection: reader, monitor: nil, scheduler: scheduler, preferences: nil,
                                startImmediately: false, uptime: { clock.value })
         defer { store.stop() }
         store.refresh()
@@ -225,9 +225,35 @@ struct RuntimeChecks {
               "quit can await cancelled work without accepting its late result")
     }
 
+    static func checkLanguageSwitch() async throws {
+        let reader = ControlledReader(), scheduler = TestScheduler(), clock = TestClock()
+        let store = UsageStore(connection: reader, monitor: nil, scheduler: scheduler, preferences: nil,
+                               startImmediately: false, uptime: { clock.value })
+        defer { store.stop() }
+        store.refresh()
+        try await waitFor { await reader.requests == 1 }
+        store.toggleLanguage()
+        check(store.state.language == .english && store.state.isRefreshing, "language switches immediately during an in-flight query")
+        await reader.resolve(0, .success(try snapshot(used: 65)))
+        try await waitFor { !store.state.isRefreshing }
+        check(store.state.language == .english && store.state.remaining == 35, "query completion preserves the selected language and quota")
+        let updated = store.state.updatedAt
+        store.toggleLanguage()
+        check(store.state.language == .chinese && store.state.updatedAt == updated && scheduler.delay == 60, "language switch preserves data timestamp and refresh schedule")
+        check(await reader.requests == 1, "language switch sends no additional query")
+        clock.value += 61
+        store.refresh()
+        try await waitFor { await reader.requests == 2 }
+        await reader.resolve(1, .failure(QuotaError.timedOut))
+        try await waitFor { !store.state.isRefreshing }
+        store.toggleLanguage()
+        check(store.state.lastError == .timedOut && store.state.errorMessage == AppLanguage.english.text(.errorTimedOut), "existing errors switch language without losing their meaning")
+    }
+
     static func main() async throws {
         try await checkStore()
         try await checkScheduling()
+        try await checkLanguageSwitch()
         try await checkProcess()
         print("\(checked) runtime checks passed.")
     }

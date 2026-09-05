@@ -11,6 +11,14 @@
 
 “其他额度”整行都能点击展开和折叠。面板采用紧凑布局，顶部固定，展开内容向下增加，取消了窗口缩放动画。
 
+## 中英文界面
+
+点击面板右上角的「EN / 中文」即可切换。首次使用默认中文，选择保存在本应用的 `displayLanguage` 偏好中；不修改 macOS 的系统语言。日期、时间、额度周期、错误和辅助功能提示同步切换。
+
+双语文案与格式集中在 `Models/AppLanguage.swift`。错误保存为类型而不是已翻译的字符串，因此已有错误也能即时换语言。语言切换只发布一次本地状态，不读取网络，不调整查询定时器。
+
+1.5.0 验证：40 项模型检查和 32 项运行检查通过；本机确认中英文双向切换、英文日期和提示、切换时保留展开状态，以及退出重启后恢复语言选择。
+
 ## 节能运行方式
 
 | 状态 | 自动查询频率 |
@@ -39,7 +47,7 @@
 安装支持 Swift 6 的 Xcode Command Line Tools。项目没有第三方 Swift 包依赖。
 
 ```sh
-./script/check.sh                  # 30 项模型检查 + 27 项运行检查，无需完整 Xcode
+./script/check.sh                  # 40 项模型检查 + 32 项运行检查，无需完整 Xcode
 ./script/build_and_run.sh          # 构建并运行
 ./script/build_and_run.sh --build-only
 ./script/package.sh                # 以 Release 构建，在 dist/ 生成 app、ZIP 和 SHA-256
@@ -67,5 +75,7 @@
 只调用本机 Codex 程序的初始化和 `account/rateLimits/read`，不发起模型请求、不兑换重置券、不购买额度、不修改登录、不读取对话。认证由 Codex 自己处理，应用不读取或复制登录凭据。
 
 额度仅留在内存中。独立运行状态位于当前用户缓存目录的 `local.codexusage.menubar` 中；删除这个工具不会删除或退出你的 Codex 账户。
+
+语言偏好单独保存在 macOS 的应用偏好中，不保存账户数据。
 
 本项目是个人工具，并非 OpenAI 官方应用。Codex 图标资源的归属见 [Assets/README.md](Assets/README.md)。

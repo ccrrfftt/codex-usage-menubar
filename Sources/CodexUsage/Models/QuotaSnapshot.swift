@@ -10,12 +10,12 @@ struct QuotaWindow: Decodable, Sendable, Equatable {
         return max(0, min(100, 100 - usedPercent))
     }
 
-    var period: String {
+    func period(in language: AppLanguage = .chinese) -> String {
         guard let minutes = windowDurationMins, minutes.isFinite,
-              minutes > 0, minutes < Double(Int.max) else { return "额度周期未提供" }
-        if minutes.truncatingRemainder(dividingBy: 1440) == 0 { return "\(Int(minutes / 1440)) 天额度" }
-        if minutes.truncatingRemainder(dividingBy: 60) == 0 { return "\(Int(minutes / 60)) 小时额度" }
-        return "\(Int(minutes)) 分钟额度"
+              minutes > 0, minutes < Double(Int.max) else { return language.text(.periodUnavailable) }
+        if minutes.truncatingRemainder(dividingBy: 1440) == 0 { return language.period(Int(minutes / 1440), unit: .day) }
+        if minutes.truncatingRemainder(dividingBy: 60) == 0 { return language.period(Int(minutes / 60), unit: .hour) }
+        return language.period(Int(minutes), unit: .minute)
     }
 
     var resetDate: Date? {
@@ -34,7 +34,7 @@ struct QuotaBucket: Decodable, Sendable, Identifiable {
     let spendControlReached: Bool?
 
     var id: String { limitId ?? limitName ?? "codex" }
-    var name: String { id == "codex" ? "Codex 主额度" : (limitName ?? id) }
+    func name(in language: AppLanguage) -> String { id == "codex" ? "Codex \(language.text(.mainLimit))" : (limitName ?? id) }
     var windows: [QuotaWindow] { [primary, secondary].compactMap { $0 } }
     var headline: QuotaWindow? {
         guard let primary else { return secondary }
@@ -97,19 +97,17 @@ struct QuotaSnapshot: Decodable, Sendable {
     }
 }
 
-func quotaPercent(_ value: Double?) -> String {
+func quotaPercent(_ value: Double?, language: AppLanguage = .chinese) -> String {
     guard let value, value.isFinite else { return "—" }
-    return value.formatted(.number.precision(.fractionLength(0...1))) + "%"
+    return value.formatted(.number.precision(.fractionLength(0...1)).locale(language.locale)) + "%"
 }
 
-func resetCountdown(_ date: Date?, now: Date = .now) -> String {
-    guard let date else { return "重置时间未提供" }
+func resetCountdown(_ date: Date?, now: Date = .now, language: AppLanguage = .chinese) -> String {
+    guard let date else { return language.text(.resetUnavailable) }
     let seconds = date.timeIntervalSince(now)
-    guard seconds.isFinite, seconds / 60 < Double(Int.max) else { return "重置时间未提供" }
-    guard seconds > 0 else { return "等待额度更新" }
+    guard seconds.isFinite, seconds / 60 < Double(Int.max) else { return language.text(.resetUnavailable) }
+    guard seconds > 0 else { return language.text(.waitingForReset) }
     let minutes = Int(ceil(seconds / 60))
     let days = minutes / 1440, hours = (minutes % 1440) / 60
-    if days > 0 { return "\(days) 天 \(hours) 小时后" }
-    if hours > 0 { return "\(hours) 小时 \(minutes % 60) 分钟后" }
-    return "\(max(1, minutes)) 分钟后"
+    return language.countdown(days: days, hours: hours, minutes: minutes % 60)
 }
