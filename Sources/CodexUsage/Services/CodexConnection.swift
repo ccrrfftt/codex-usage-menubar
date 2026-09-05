@@ -5,19 +5,6 @@ protocol QuotaReading: Sendable {
     func read() async throws -> QuotaSnapshot
 }
 
-enum QuotaError: LocalizedError {
-    case unavailable, disconnected, timedOut, account, malformed
-    var errorDescription: String? {
-        switch self {
-        case .unavailable: "未找到 Codex，请先安装桌面应用。"
-        case .disconnected: "用量连接已中断，稍后自动重试。"
-        case .timedOut: "用量查询超时，请检查网络。"
-        case .account: "请确认 Codex 已登录 ChatGPT 账户。"
-        case .malformed: "暂时无法识别服务返回的用量数据。"
-        }
-    }
-}
-
 /// Serial utility work; each read owns and closes its process before returning.
 final class CodexConnection: QuotaReading, @unchecked Sendable {
     private let queue = DispatchQueue(label: "local.codexusage.connection", qos: .utility, autoreleaseFrequency: .workItem)

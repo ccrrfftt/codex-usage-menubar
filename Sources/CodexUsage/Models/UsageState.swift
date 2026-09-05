@@ -4,10 +4,13 @@ import Foundation
 struct UsageState {
     var snapshot: QuotaSnapshot?
     var updatedAt: Date?
-    var lastError: String?
+    var lastError: QuotaError?
     var isRefreshing = false
     var now = Date.now
     var energy = EnergyState()
+    var language = AppLanguage.chinese
+
+    var errorMessage: String? { lastError?.message(in: language) }
 
     var remaining: Double? { snapshot?.main?.headline?.remaining }
     var stale: Bool {
@@ -15,28 +18,29 @@ struct UsageState {
             (updatedAt.map { now.timeIntervalSince($0) > (EnergyPolicy.refreshInterval(state: energy) ?? 60) * 2 } ?? true)
     }
     var status: String {
-        if !energy.networkAvailable { return "离线，联网后更新" }
-        if !energy.allowsRefresh { return "休眠期间暂停查询" }
-        if isRefreshing { return "正在同步…" }
-        if stale { return updatedAt == nil ? "等待连接" : "当前显示上次数据" }
-        return "智能节能更新"
+        if !energy.networkAvailable { return language.text(.offlineStatus) }
+        if !energy.allowsRefresh { return language.text(.pausedStatus) }
+        if isRefreshing { return language.text(.syncing) }
+        if stale { return language.text(updatedAt == nil ? .waitingForConnection : .previousData) }
+        return language.text(.efficientUpdates)
     }
     var energyDescription: String {
-        if !energy.networkAvailable { return "离线时暂停查询，网络恢复后自动更新。" }
-        if !energy.allowsRefresh { return "屏幕或系统休眠期间暂停查询。" }
-        return energy.onBattery ? "使用电池：每 5 分钟自动更新。" : "已接通电源：每 1 分钟自动更新。"
+        if !energy.networkAvailable { return language.text(.offlineHelp) }
+        if !energy.allowsRefresh { return language.text(.pausedHelp) }
+        return language.text(energy.onBattery ? .batteryHelp : .acHelp)
     }
     var updateLabel: String {
-        if isRefreshing { return "正在更新…" }
-        guard let updatedAt else { return "尚未同步" }
-        let time = updatedAt.formatted(date: .omitted, time: .standard)
-        return stale ? "旧数据 · \(time)" : "更新于 \(time)"
+        if isRefreshing { return language.text(.updating) }
+        guard let updatedAt else { return language.text(.notSynced) }
+        return language.updatedLabel(updatedAt, stale: stale)
     }
     var statusItem: StatusItemState {
-        let percent = quotaPercent(remaining)
+        let percent = quotaPercent(remaining, language: language)
+        let label = language.text(.statusItemLabel)
         return StatusItemState(
             title: percent + (remaining != nil && stale ? " ·" : ""),
-            tooltip: "Codex 剩余 \(percent) · \(status)\n\(energyDescription)",
+            tooltip: "\(label) \(percent) · \(status)\n\(energyDescription)",
+            accessibilityLabel: label,
             accessibilityValue: percent)
     }
 }
@@ -44,5 +48,6 @@ struct UsageState {
 struct StatusItemState: Equatable {
     let title: String
     let tooltip: String
+    let accessibilityLabel: String
     let accessibilityValue: String
 }

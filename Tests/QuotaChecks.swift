@@ -13,7 +13,7 @@ struct QuotaChecks {
             print("PASS: " + name)
         }
         let mapped = try decode(#"{"rateLimits":{"primary":{"usedPercent":99}},"rateLimitsByLimitId":{"codex":{"limitId":"codex","primary":{"usedPercent":18,"windowDurationMins":10080}}}}"#)
-        check(mapped.main?.headline?.remaining == 82 && mapped.main?.headline?.period == "7 天额度", "multi-bucket precedence and actual period")
+        check(mapped.main?.headline?.remaining == 82 && mapped.main?.headline?.period() == "7 天额度", "multi-bucket precedence and actual period")
         let missing = try decode(#"{"rateLimits":{"primary":{"usedPercent":null},"secondary":null}}"#)
         check(missing.main?.headline?.remaining == nil && quotaPercent(missing.main?.headline?.remaining) == "—", "null is unavailable, not full quota")
         let multiple = try decode(#"{"rateLimits":{"primary":{"usedPercent":10,"windowDurationMins":300},"secondary":{"usedPercent":65,"windowDurationMins":10080}}}"#)
@@ -40,7 +40,7 @@ struct QuotaChecks {
         check(identifiers.main?.id == "codex" && identifiers.otherBuckets.map(\.id) == ["other", "spark"], "map keys provide stable authoritative bucket IDs")
         let malformedLegacy = try decode(#"{"rateLimits":"obsolete","rateLimitsByLimitId":{"codex":{"primary":{"usedPercent":20}}}}"#)
         check(malformedLegacy.main?.headline?.remaining == 80, "unused legacy data cannot break a valid modern response")
-        check(QuotaWindow(usedPercent: .infinity, windowDurationMins: 1e30, resetsAt: nil).period == "额度周期未提供", "oversized periods cannot trap integer conversion")
+        check(QuotaWindow(usedPercent: .infinity, windowDurationMins: 1e30, resetsAt: nil).period() == "额度周期未提供", "oversized periods cannot trap integer conversion")
         check(resetCountdown(Date(timeIntervalSince1970: 1e30)) == "重置时间未提供", "oversized reset dates cannot trap integer conversion")
         let ac = EnergyState()
         var battery = ac; battery.onBattery = true
@@ -60,6 +60,19 @@ struct QuotaChecks {
         check(EnergyPolicy.refreshInterval(state: ac, failures: 10) == 1800, "AC failures back off to thirty minutes")
         check(EnergyPolicy.refreshInterval(state: battery, failures: 10) == 1800, "battery failures back off to thirty minutes")
         check(EnergyPolicy.timerTolerance(interval: 300) == 30, "timer coalescing tolerance is applied")
+        check(AppLanguage.restored(from: "en") == .english && AppLanguage.restored(from: nil) == .chinese && AppLanguage.restored(from: "invalid") == .chinese, "language preference restores safely with a Chinese default")
+        check(AppLanguage.chinese.other.other == .chinese, "one-click language toggle is reversible")
+        check(mapped.main?.headline?.period(in: .english) == "7-day limit", "English quota period uses the actual window length")
+        check(quotaPercent(79.5, language: .english) == "79.5%" && quotaPercent(nil, language: .english) == "—", "English formatting preserves fractional and missing quota")
+        let reference = Date(timeIntervalSince1970: 1000)
+        check(resetCountdown(reference.addingTimeInterval(26 * 3600), now: reference, language: .english) == "in 1d 2h", "English reset countdown preserves the duration")
+        check(resetCountdown(reference, now: reference, language: .english) == "Waiting for usage update", "English expired-reset state does not invent fresh quota")
+        let exampleDate = ISO8601DateFormatter().date(from: "2026-09-21T00:23:00Z")!
+        check(AppLanguage.english.dateTime(exampleDate, includeYear: true).contains("Sep") && AppLanguage.chinese.dateTime(exampleDate, includeYear: true).contains("年"), "date language follows the app rather than the system locale")
+        check(AppLanguage.english.cardCount(1) == "1 card" && AppLanguage.english.cardCount(3) == "3 cards", "English reset-card counts have correct singular and plural")
+        let englishError = UsageState(lastError: .timedOut, language: .english)
+        check(englishError.errorMessage == "Usage request timed out. Check your connection.", "stored error type can render in English without another request")
+        check(englishError.statusItem.accessibilityLabel == "Codex remaining quota" && englishError.energyDescription == "On AC power: updates every minute.", "menu-bar accessibility and power help follow the language")
         print("\(checked) checks passed.")
     }
 }

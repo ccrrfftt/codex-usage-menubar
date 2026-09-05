@@ -7,6 +7,7 @@ final class UsageStore: ObservableObject {
     private let connection: any QuotaReading
     private let systemMonitor: SystemActivityMonitor?
     private let scheduler: any RefreshScheduling
+    private let preferences: UserDefaults?
     private let uptime: () -> TimeInterval
     private var refreshTask: Task<Void, Never>?
     private var needsRefreshAfterCooldown = false
@@ -18,15 +19,27 @@ final class UsageStore: ObservableObject {
     init(connection: any QuotaReading = CodexConnection(),
          monitor: SystemActivityMonitor? = SystemActivityMonitor(),
          scheduler: any RefreshScheduling = RefreshScheduler(),
+         preferences: UserDefaults? = .standard,
          startImmediately: Bool = true,
          uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
         self.connection = connection
         systemMonitor = monitor
         self.scheduler = scheduler
+        self.preferences = preferences
         self.uptime = uptime
-        state = UsageState(energy: monitor?.state ?? EnergyState())
+        state = UsageState(energy: monitor?.state ?? EnergyState(),
+                           language: AppLanguage.restored(from: preferences?.string(forKey: AppLanguage.preferenceKey)))
         monitor?.onChange = { [weak self] state in self?.updateSystemState(state) }
         if startImmediately { refresh() }
+    }
+
+    func toggleLanguage() {
+        guard !stopped else { return }
+        var next = state
+        next.language = state.language.other
+        next.now = .now
+        preferences?.set(next.language.rawValue, forKey: AppLanguage.preferenceKey)
+        state = next
     }
 
     func prepareForDisplay() {
@@ -105,7 +118,7 @@ final class UsageStore: ObservableObject {
             next.lastError = nil
             failures = 0
         case .failure(let error):
-            next.lastError = error.localizedDescription
+            next.lastError = error as? QuotaError ?? .disconnected
             failures = min(5, failures + 1)
         }
         state = next

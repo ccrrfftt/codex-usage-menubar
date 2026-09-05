@@ -28,7 +28,6 @@ final class StatusItemController: NSObject {
             }
             button.target = self
             button.action = #selector(togglePopover)
-            button.setAccessibilityLabel("Codex 剩余用量")
         }
         let content = NSHostingController(rootView: UsageMenuView(store: store))
         content.sizingOptions = [.preferredContentSize]
@@ -46,6 +45,9 @@ final class StatusItemController: NSObject {
         guard let button = item.button else { return }
         if button.title != state.title { button.title = state.title }
         if button.toolTip != state.tooltip { button.toolTip = state.tooltip }
+        if button.accessibilityLabel() != state.accessibilityLabel {
+            button.setAccessibilityLabel(state.accessibilityLabel)
+        }
         if button.accessibilityValue() as? String != state.accessibilityValue {
             button.setAccessibilityValue(state.accessibilityValue)
         }
