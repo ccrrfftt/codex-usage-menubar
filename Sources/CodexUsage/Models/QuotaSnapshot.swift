@@ -41,8 +41,19 @@ struct QuotaBucket: Decodable, Sendable, Identifiable {
     }
 }
 
+struct ResetCard: Decodable, Sendable {
+    let expiresAt: Double?
+    let status: String?
+
+    var expirationDate: Date? {
+        guard let expiresAt, expiresAt.isFinite, expiresAt > 0 else { return nil }
+        return Date(timeIntervalSince1970: expiresAt)
+    }
+}
+
 struct ResetCreditBalance: Decodable, Sendable {
     let availableCount: Int?
+    let credits: [ResetCard]?
 }
 
 struct QuotaSnapshot: Decodable, Sendable {
@@ -53,6 +64,12 @@ struct QuotaSnapshot: Decodable, Sendable {
     var resetCardCount: Int? {
         guard let count = rateLimitResetCredits?.availableCount, count >= 0 else { return nil }
         return count
+    }
+
+    var resetCards: [ResetCard]? {
+        rateLimitResetCredits?.credits?
+            .filter { $0.status == nil || $0.status == "available" }
+            .sorted { ($0.expirationDate ?? .distantFuture) < ($1.expirationDate ?? .distantFuture) }
     }
 
     var buckets: [QuotaBucket] {
