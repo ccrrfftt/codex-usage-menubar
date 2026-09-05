@@ -23,12 +23,6 @@ final class SystemActivityMonitor {
         observe(workspace, NSWorkspace.sessionDidResignActiveNotification) { $0.sessionInactive = true }
         observe(workspace, NSWorkspace.sessionDidBecomeActiveNotification) { $0.sessionInactive = false }
 
-        for name in [Notification.Name.NSProcessInfoPowerStateDidChange, ProcessInfo.thermalStateDidChangeNotification] {
-            let token = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in self?.updatePower() }
-            }
-            observations.append((.default, token))
-        }
         let callback: IOPowerSourceCallbackType = { context in
             guard let context else { return }
             let monitor = Unmanaged<SystemActivityMonitor>.fromOpaque(context).takeUnretainedValue()
@@ -76,9 +70,6 @@ final class SystemActivityMonitor {
                let source = IOPSGetProvidingPowerSourceType(info)?.takeUnretainedValue() {
                 state.onBattery = (source as String) != kIOPSACPowerValue
             }
-            state.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
-            let thermal = ProcessInfo.processInfo.thermalState
-            state.thermallyConstrained = thermal == .serious || thermal == .critical
         }
     }
 }

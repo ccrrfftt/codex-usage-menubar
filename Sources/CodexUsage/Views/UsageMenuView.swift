@@ -41,22 +41,13 @@ struct UsageMenuView: View {
                     Label("刷新", systemImage: "arrow.clockwise")
                 }.disabled(store.isRefreshing)
                 Spacer(minLength: 4)
-                Text("查看时").font(.caption2).foregroundStyle(.secondary)
-                Picker("自动更新间隔", selection: $store.interval) {
-                    Text("15 秒").tag(15)
-                    Text("30 秒").tag(30)
-                    Text("60 秒").tag(60)
-                }.labelsHidden().frame(width: 71)
-                    .help(store.energyDescription)
-            }.controlSize(.small)
-            HStack {
                 Text(updateLabel).font(.caption2).foregroundStyle(.secondary)
                     .help(store.energyDescription)
-                Spacer()
+                Spacer(minLength: 4)
                 Button("退出应用") { store.stop(); NSApplication.shared.terminate(nil) }
                     .font(.caption2).buttonStyle(.plain)
                     .keyboardShortcut("q", modifiers: .command)
-            }
+            }.controlSize(.small)
         }
         .padding(12)
         .frame(width: 276, alignment: .topLeading)

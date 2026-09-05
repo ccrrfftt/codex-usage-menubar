@@ -7,11 +7,7 @@ final class UsageStore: ObservableObject {
     @Published private(set) var updatedAt: Date?
     @Published private(set) var lastError: String?
     @Published private(set) var isRefreshing = false
-    @Published var interval = 30 {
-        didSet { scheduleNextRefresh() }
-    }
     @Published private(set) var now = Date.now
-    @Published private(set) var menuVisible = false
     @Published private(set) var energy = EnergyState()
     private let connection = CodexConnection()
     private let systemMonitor = SystemActivityMonitor()
@@ -20,12 +16,12 @@ final class UsageStore: ObservableObject {
     private var lastCompletion: Date?
     private var failures = 0
     private var stopped = false
+    private var menuVisible = false
 
     var main: QuotaBucket? { snapshot?.main }
     var remaining: Double? { main?.headline?.remaining }
     var effectiveInterval: TimeInterval? {
-        EnergyPolicy.refreshInterval(menuVisible: menuVisible, requestedInterval: interval,
-                                     state: energy, failures: failures)
+        EnergyPolicy.refreshInterval(state: energy, failures: failures)
     }
     var stale: Bool {
         lastError != nil || !energy.allowsRefresh ||
@@ -44,10 +40,7 @@ final class UsageStore: ObservableObject {
     var energyDescription: String {
         if !energy.networkAvailable { return "离线时暂停查询，网络恢复后自动更新。" }
         if !energy.allowsRefresh { return "屏幕或系统休眠期间暂停查询。" }
-        if energy.constrained { return "低电量或温度较高：收起后约每 10 分钟更新；展开时最短 60 秒，打开菜单时优先同步。" }
-        let backgroundMinutes = energy.constrained ? 10 : energy.onBattery ? 5 : 2
-        let condition = energy.constrained ? "低电量或温度较高" : energy.onBattery ? "使用电池" : "已接通电源"
-        return "\(condition)：菜单收起后约每 \(backgroundMinutes) 分钟更新；打开菜单时优先同步。"
+        return energy.onBattery ? "使用电池：每 5 分钟自动更新。" : "已接通电源：每 1 分钟自动更新。"
     }
 
     init() {
@@ -60,9 +53,9 @@ final class UsageStore: ObservableObject {
         guard !stopped, visible != menuVisible else { return }
         menuVisible = visible
         now = .now
-        if !visible { connection.stop() }
-        scheduleNextRefresh()
-        if visible && (lastError != nil || updatedAt.map { now.timeIntervalSince($0) >= 15 } ?? true) {
+        // Opening the panel neither accelerates polling nor postpones the existing timer.
+        if visible, let interval = effectiveInterval,
+           lastCompletion.map({ now.timeIntervalSince($0) >= interval }) ?? true {
             Task { await refresh() }
         }
     }
@@ -78,11 +71,10 @@ final class UsageStore: ObservableObject {
         defer {
             isRefreshing = false
             lastCompletion = .now
-            if !menuVisible || !energy.allowsRefresh || energy.constrained { connection.stop() }
             scheduleNextRefresh()
         }
         do {
-            let result = try await connection.read(keepAlive: menuVisible && !energy.constrained)
+            let result = try await connection.read()
             guard !stopped, energy.allowsRefresh else { return }
             snapshot = result
             updatedAt = .now
