@@ -36,6 +36,12 @@ struct QuotaChecks {
         check(datedCards.resetCards?.first?.expirationDate == Date(timeIntervalSince1970: 100), "cards sorted by earliest expiry")
         check(datedCards.resetCards?.last?.expirationDate == nil, "unknown expiry remains unknown and sorts last")
         check(unknownCards.resetCards == nil, "unavailable card detail is not an empty fetched list")
+        let identifiers = try decode(#"{"rateLimitsByLimitId":{"spark":{"limitId":"codex","primary":{"usedPercent":30}},"codex":{"primary":{"usedPercent":20}},"other":{"primary":{"usedPercent":40}}}}"#)
+        check(identifiers.main?.id == "codex" && identifiers.otherBuckets.map(\.id) == ["other", "spark"], "map keys provide stable authoritative bucket IDs")
+        let malformedLegacy = try decode(#"{"rateLimits":"obsolete","rateLimitsByLimitId":{"codex":{"primary":{"usedPercent":20}}}}"#)
+        check(malformedLegacy.main?.headline?.remaining == 80, "unused legacy data cannot break a valid modern response")
+        check(QuotaWindow(usedPercent: .infinity, windowDurationMins: 1e30, resetsAt: nil).period == "额度周期未提供", "oversized periods cannot trap integer conversion")
+        check(resetCountdown(Date(timeIntervalSince1970: 1e30)) == "重置时间未提供", "oversized reset dates cannot trap integer conversion")
         let ac = EnergyState()
         var battery = ac; battery.onBattery = true
         let cadence: (EnergyState) -> TimeInterval? = { EnergyPolicy.refreshInterval(state: $0) }

@@ -11,8 +11,8 @@ struct QuotaWindow: Decodable, Sendable, Equatable {
     }
 
     var period: String {
-        guard let minutes = windowDurationMins, minutes.isFinite, minutes > 0 else { return "额度周期未提供" }
-        if minutes == 10080 { return "7 天额度" }
+        guard let minutes = windowDurationMins, minutes.isFinite,
+              minutes > 0, minutes < Double(Int.max) else { return "额度周期未提供" }
         if minutes.truncatingRemainder(dividingBy: 1440) == 0 { return "\(Int(minutes / 1440)) 天额度" }
         if minutes.truncatingRemainder(dividingBy: 60) == 0 { return "\(Int(minutes / 60)) 小时额度" }
         return "\(Int(minutes)) 分钟额度"
@@ -37,7 +37,17 @@ struct QuotaBucket: Decodable, Sendable, Identifiable {
     var name: String { id == "codex" ? "Codex 主额度" : (limitName ?? id) }
     var windows: [QuotaWindow] { [primary, secondary].compactMap { $0 } }
     var headline: QuotaWindow? {
-        windows.filter { $0.remaining != nil }.min { ($0.remaining ?? 101) < ($1.remaining ?? 101) } ?? windows.first
+        guard let primary else { return secondary }
+        guard let secondary else { return primary }
+        guard let first = primary.remaining else { return secondary.remaining == nil ? primary : secondary }
+        guard let second = secondary.remaining else { return primary }
+        return first <= second ? primary : secondary
+    }
+
+    func identified(by id: String) -> QuotaBucket {
+        QuotaBucket(limitId: id, limitName: limitName, primary: primary, secondary: secondary,
+                    planType: planType, rateLimitReachedType: rateLimitReachedType,
+                    spendControlReached: spendControlReached)
     }
 }
 
@@ -57,35 +67,33 @@ struct ResetCreditBalance: Decodable, Sendable {
 }
 
 struct QuotaSnapshot: Decodable, Sendable {
-    let rateLimits: QuotaBucket?
-    let rateLimitsByLimitId: [String: QuotaBucket]?
-    let rateLimitResetCredits: ResetCreditBalance?
+    let main: QuotaBucket?
+    let otherBuckets: [QuotaBucket]
+    let resetCardCount: Int?
+    let resetCards: [ResetCard]?
 
-    var resetCardCount: Int? {
-        guard let count = rateLimitResetCredits?.availableCount, count >= 0 else { return nil }
-        return count
+    private enum CodingKeys: String, CodingKey {
+        case rateLimits, rateLimitsByLimitId, rateLimitResetCredits
     }
 
-    var resetCards: [ResetCard]? {
-        rateLimitResetCredits?.credits?
+    // Normalize once on the query queue, not every time SwiftUI reads the snapshot.
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let mapped = try values.decodeIfPresent([String: QuotaBucket].self, forKey: .rateLimitsByLimitId)
+        if let mapped, !mapped.isEmpty {
+            main = mapped["codex"]?.identified(by: "codex")
+            otherBuckets = mapped.keys.filter { $0 != "codex" }.sorted().compactMap { key in
+                mapped[key]?.identified(by: key)
+            }
+        } else {
+            main = try values.decodeIfPresent(QuotaBucket.self, forKey: .rateLimits)?.identified(by: "codex")
+            otherBuckets = []
+        }
+        let balance = try values.decodeIfPresent(ResetCreditBalance.self, forKey: .rateLimitResetCredits)
+        resetCardCount = balance?.availableCount.flatMap { $0 >= 0 ? $0 : nil }
+        resetCards = balance?.credits?
             .filter { $0.status == nil || $0.status == "available" }
             .sorted { ($0.expirationDate ?? .distantFuture) < ($1.expirationDate ?? .distantFuture) }
-    }
-
-    var buckets: [QuotaBucket] {
-        if let mapped = rateLimitsByLimitId, !mapped.isEmpty {
-            return mapped.sorted { a, b in
-                if a.key == "codex" { return true }
-                if b.key == "codex" { return false }
-                return a.key < b.key
-            }.map { $0.value }
-        }
-        return [rateLimits].compactMap { $0 }
-    }
-
-    var main: QuotaBucket? {
-        if let mapped = rateLimitsByLimitId, !mapped.isEmpty { return mapped["codex"] }
-        return rateLimits
     }
 }
 
@@ -97,6 +105,7 @@ func quotaPercent(_ value: Double?) -> String {
 func resetCountdown(_ date: Date?, now: Date = .now) -> String {
     guard let date else { return "重置时间未提供" }
     let seconds = date.timeIntervalSince(now)
+    guard seconds.isFinite, seconds / 60 < Double(Int.max) else { return "重置时间未提供" }
     guard seconds > 0 else { return "等待额度更新" }
     let minutes = Int(ceil(seconds / 60))
     let days = minutes / 1440, hours = (minutes % 1440) / 60
