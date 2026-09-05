@@ -44,6 +44,7 @@
 - 只保留一个带时间容差的一次性查询定时器，允许系统合并唤醒。
 - 每次查询结束后释放 Codex 查询子进程，菜单展开时也不保持闲置连接。
 - 休眠、离线或退出会取消正在等待的查询；握手和查询共用一个 25 秒总超时。
+- 查询进程优先通过关闭输入正常退出，异常不退出时采用有时限的清理；正常退出应用会等待当前查询清理完成。
 - 每次查询仅在开始和完成时发布界面状态；菜单栏值未变化时跳过更新。
 - 重置卡排序和额度分组只在收到新数据时计算。发布包使用 Release 优化构建。
 - 反复失败时逐步延长重试，最长 30 分钟；断网期间不定时重试。
@@ -58,7 +59,7 @@
 安装支持 Swift 6 的 Xcode Command Line Tools。项目没有第三方 Swift 包依赖。
 
 ```sh
-./script/check.sh                  # 30 项模型检查 + 18 项运行检查，无需完整 Xcode
+./script/check.sh                  # 30 项模型检查 + 27 项运行检查，无需完整 Xcode
 ./script/build_and_run.sh          # 构建并运行
 ./script/build_and_run.sh --build-only
 ./script/package.sh                # 以 Release 构建，在 dist/ 生成 app、ZIP 和 SHA-256
@@ -72,6 +73,7 @@
 - `Services/StatusItemController.swift`：原生菜单栏按钮和 SwiftUI 弹出面板之间的边界。
 - `Services/CodexConnection.swift`：串行管理只读 Codex app-server 连接。
 - `Stores/UsageStore.swift`：刷新、错误和数据时效状态。
+- `Services/RefreshScheduler.swift`：单次定时器的创建、时间容差和取消。
 - `Models/`：额度模型与展示规则。
 - `Models/UsageState.swift`：一次发布的界面状态和去重后的菜单栏数据。
 - `Views/`：主布局，以及额度、重置卡和其他额度三个独立视图。

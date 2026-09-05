@@ -14,6 +14,7 @@ struct CodexUsageApp: App {
 final class UsageApplicationDelegate: NSObject, NSApplicationDelegate {
     private var store: UsageStore?
     private var statusController: StatusItemController?
+    private var terminating = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -32,5 +33,16 @@ final class UsageApplicationDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         store?.stop()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if terminating { return .terminateLater }
+        guard let pending = store?.stop() else { return .terminateNow }
+        terminating = true
+        Task {
+            await pending.value
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 }

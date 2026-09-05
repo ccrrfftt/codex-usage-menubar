@@ -6,9 +6,10 @@ final class UsageStore: ObservableObject {
     @Published private(set) var state: UsageState
     private let connection: any QuotaReading
     private let systemMonitor: SystemActivityMonitor?
+    private let scheduler: any RefreshScheduling
     private let uptime: () -> TimeInterval
     private var refreshTask: Task<Void, Never>?
-    private var refreshTimer: Timer?
+    private var needsRefreshAfterCooldown = false
     private var lastAttempt: TimeInterval?
     private var lastCompletion: TimeInterval?
     private var failures = 0
@@ -16,10 +17,12 @@ final class UsageStore: ObservableObject {
 
     init(connection: any QuotaReading = CodexConnection(),
          monitor: SystemActivityMonitor? = SystemActivityMonitor(),
+         scheduler: any RefreshScheduling = RefreshScheduler(),
          startImmediately: Bool = true,
          uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
         self.connection = connection
         systemMonitor = monitor
+        self.scheduler = scheduler
         self.uptime = uptime
         state = UsageState(energy: monitor?.state ?? EnergyState())
         monitor?.onChange = { [weak self] state in self?.updateSystemState(state) }
@@ -40,10 +43,12 @@ final class UsageStore: ObservableObject {
         guard !stopped, state.energy.allowsRefresh, refreshTask == nil else { return }
         let cooldown = lastAttempt.map { max(0, 5 - (uptime() - $0)) } ?? 0
         if cooldown > 0 {
+            needsRefreshAfterCooldown = true
             scheduleRefresh(after: cooldown)
             return
         }
-        invalidateTimer()
+        needsRefreshAfterCooldown = false
+        scheduler.cancel()
         lastAttempt = uptime()
         var next = state
         next.isRefreshing = true
@@ -59,13 +64,16 @@ final class UsageStore: ObservableObject {
         }
     }
 
-    func stop() {
-        guard !stopped else { return }
+    @discardableResult
+    func stop() -> Task<Void, Never>? {
+        guard !stopped else { return nil }
         stopped = true
-        invalidateTimer()
-        refreshTask?.cancel()
+        scheduler.cancel()
+        let pending = refreshTask
+        pending?.cancel()
         refreshTask = nil
         systemMonitor?.stop()
+        return pending
     }
 
     func updateSystemState(_ energy: EnergyState) {
@@ -106,26 +114,19 @@ final class UsageStore: ObservableObject {
 
     private func scheduleNextRefresh() {
         guard let interval = EnergyPolicy.refreshInterval(state: state.energy, failures: failures) else {
-            invalidateTimer()
+            scheduler.cancel()
             return
         }
+        if needsRefreshAfterCooldown { refresh(); return }
         let elapsed = lastCompletion.map { uptime() - $0 } ?? interval
         scheduleRefresh(after: max(1, interval - elapsed))
     }
 
     private func scheduleRefresh(after delay: TimeInterval) {
-        invalidateTimer()
-        guard !stopped, state.energy.allowsRefresh, refreshTask == nil else { return }
-        let timer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
+        guard !stopped, state.energy.allowsRefresh, refreshTask == nil else {
+            scheduler.cancel()
+            return
         }
-        timer.tolerance = EnergyPolicy.timerTolerance(interval: delay)
-        refreshTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
-    }
-
-    private func invalidateTimer() {
-        refreshTimer?.invalidate()
-        refreshTimer = nil
+        scheduler.schedule(after: delay) { [weak self] in self?.refresh() }
     }
 }

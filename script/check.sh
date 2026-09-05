@@ -14,6 +14,7 @@ xcrun swiftc -swift-version 6 -module-cache-path "$CHECK_ROOT/module-cache" \
   "$PROJECT_ROOT"/Sources/CodexUsage/Models/*.swift \
   "$PROJECT_ROOT/Sources/CodexUsage/Services/CodexConnection.swift" \
   "$PROJECT_ROOT/Sources/CodexUsage/Services/SystemActivityMonitor.swift" \
+  "$PROJECT_ROOT/Sources/CodexUsage/Services/RefreshScheduler.swift" \
   "$PROJECT_ROOT/Sources/CodexUsage/Stores/UsageStore.swift" \
   "$PROJECT_ROOT/Tests/RuntimeChecks.swift" -o "$CHECK_ROOT/runtime-checks"
 "$CHECK_ROOT/runtime-checks" "$CHECK_ROOT/fake-codex"

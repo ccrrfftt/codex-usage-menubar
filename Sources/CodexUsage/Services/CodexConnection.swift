@@ -33,6 +33,7 @@ final class CodexConnection: QuotaReading, @unchecked Sendable {
     }
 
     func read() async throws -> QuotaSnapshot {
+        try Task.checkCancellation()
         let cancellation = QueryCancellation()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -86,6 +87,7 @@ private final class QueryCancellation: @unchecked Sendable {
 
 private final class QuerySession {
     private let process = Process()
+    private let exited = DispatchSemaphore(value: 0)
     private let input = Pipe()
     private let output = Pipe()
     private let cancellation: QueryCancellation
@@ -109,14 +111,12 @@ private final class QuerySession {
         process.standardInput = input
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
+        let exited = self.exited
+        process.terminationHandler = { _ in exited.signal() }
     }
 
     func read() throws -> QuotaSnapshot {
-        defer {
-            try? input.fileHandleForWriting.close()
-            if process.isRunning { process.terminate() }
-            try? output.fileHandleForReading.close()
-        }
+        defer { close() }
         do {
             try cancellation.check()
             try process.run()
@@ -133,10 +133,21 @@ private final class QuerySession {
     }
 
     private struct EmptyResult: Decodable {}
+    private static let responseIDKey = CodingUserInfoKey(rawValue: "responseID")!
     private struct Response<Value: Decodable>: Decodable {
-        let id: Int?
+        let matches: Bool
         let result: Value?
-        let error: EmptyResult?
+
+        private enum CodingKeys: String, CodingKey { case id, result, error }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            let id = try? values.decode(Int.self, forKey: .id)
+            matches = id != nil && id == decoder.userInfo[QuerySession.responseIDKey] as? Int
+            guard matches else { result = nil; return }
+            if values.contains(.error), try !values.decodeNil(forKey: .error) { throw QuotaError.account }
+            result = try values.decodeIfPresent(Value.self, forKey: .result)
+        }
     }
 
     private func send(_ object: [String: Any]) throws {
@@ -152,11 +163,11 @@ private final class QuerySession {
         var request: [String: Any] = ["method": method, "id": serial]
         if let params { request["params"] = params }
         try send(request)
+        decoder.userInfo[Self.responseIDKey] = serial
         while true {
             // Decode directly into the result model, avoiding a JSON dictionary round trip.
             let response = try decoder.decode(Response<Value>.self, from: readLine())
-            guard response.id == serial else { continue }
-            if response.error != nil { throw QuotaError.account }
+            guard response.matches else { continue }
             guard let result = response.result else { throw QuotaError.malformed }
             return result
         }
@@ -188,5 +199,17 @@ private final class QuerySession {
             buffer.append(bytes)
             guard buffer.count <= 4_000_000 else { throw QuotaError.malformed }
         }
+    }
+
+    private func close() {
+        try? input.fileHandleForWriting.close()
+        defer { try? output.fileHandleForReading.close() }
+        guard process.isRunning else { return }
+        // Prefer normal EOF shutdown, then bound cleanup of a stalled owned child.
+        if exited.wait(timeout: .now() + .milliseconds(100)) == .success { return }
+        if process.isRunning { process.terminate() }
+        if exited.wait(timeout: .now() + .milliseconds(250)) == .success { return }
+        if process.isRunning { Darwin.kill(process.processIdentifier, SIGKILL) }
+        _ = exited.wait(timeout: .now() + .milliseconds(250))
     }
 }
