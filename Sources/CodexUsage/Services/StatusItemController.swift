@@ -9,6 +9,7 @@ final class StatusItemController: NSObject {
     private let item: NSStatusItem
     private let popover = NSPopover()
     private var observation: AnyCancellable?
+    private var displayedRing: QuotaRingState?
 
     init(store: UsageStore) {
         self.store = store
@@ -21,11 +22,6 @@ final class StatusItemController: NSObject {
             button.imagePosition = .imageLeading
             button.imageScaling = .scaleProportionallyDown
             button.alignment = .center
-            if let url = Bundle.main.url(forResource: "CodexStatusIcon", withExtension: "png"),
-               let icon = NSImage(contentsOf: url) {
-                icon.size = NSSize(width: 16, height: 16)
-                button.image = icon
-            }
             button.target = self
             button.action = #selector(togglePopover)
         }
@@ -43,6 +39,10 @@ final class StatusItemController: NSObject {
 
     private func updateButton(_ state: StatusItemState) {
         guard let button = item.button else { return }
+        if displayedRing != state.ring {
+            button.image = StatusItemRing.image(for: state.ring)
+            displayedRing = state.ring
+        }
         if button.title != state.title { button.title = state.title }
         if button.toolTip != state.tooltip { button.toolTip = state.tooltip }
         if button.accessibilityLabel() != state.accessibilityLabel {

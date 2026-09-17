@@ -73,6 +73,17 @@ struct QuotaChecks {
         let englishError = UsageState(lastError: .timedOut, language: .english)
         check(englishError.errorMessage == "Usage request timed out. Check your connection.", "stored error type can render in English without another request")
         check(englishError.statusItem.accessibilityLabel == "Codex remaining quota" && englishError.energyDescription == "On AC power: updates every minute.", "menu-bar accessibility and power help follow the language")
+        check(QuotaRingState(remaining: 100).fraction == 1 && QuotaRingState(remaining: 0).fraction == 0, "full and exhausted quota map to full and empty rings")
+        check(QuotaRingState(remaining: 19.9).isLow && !QuotaRingState(remaining: 20).isLow, "warning starts strictly below twenty percent")
+        check(QuotaRingState(remaining: 0).isLow, "empty quota retains the red warning")
+        check(QuotaRingState(remaining: nil).fraction == nil && !QuotaRingState(remaining: nil).isLow, "missing quota is unknown rather than empty or full")
+        check(QuotaRingState(remaining: .nan) == QuotaRingState(remaining: .infinity) && QuotaRingState(remaining: .nan).fraction == nil, "nonfinite quota has a stable unknown ring state")
+        check(QuotaRingState(remaining: -5).fraction == 0 && QuotaRingState(remaining: 120).fraction == 1, "ring drawing is bounded to one turn")
+        var ringState = UsageState(snapshot: multiple, updatedAt: .now)
+        check(ringState.statusItem.ring.fraction == 0.35 && ringState.statusItem.title == "35%", "ring and percentage share the most restrictive remaining quota")
+        let oldRing = ringState.statusItem.ring
+        ringState.lastError = .timedOut
+        check(ringState.statusItem.ring == oldRing && ringState.statusItem.title.hasSuffix(" ·"), "stale data retains the ring with the existing stale indicator")
         print("\(checked) checks passed.")
     }
 }

@@ -39,6 +39,7 @@ struct UsageState {
         let label = language.text(.statusItemLabel)
         return StatusItemState(
             title: percent + (remaining != nil && stale ? " ·" : ""),
+            ring: QuotaRingState(remaining: remaining),
             tooltip: "\(label) \(percent) · \(status)\n\(energyDescription)",
             accessibilityLabel: label,
             accessibilityValue: percent)
@@ -47,6 +48,7 @@ struct UsageState {
 
 struct StatusItemState: Equatable {
     let title: String
+    let ring: QuotaRingState
     let tooltip: String
     let accessibilityLabel: String
     let accessibilityValue: String

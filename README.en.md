@@ -12,7 +12,7 @@ Check your Codex remaining quota, reset times, and reset-card expiry dates from 
 
 Screenshot uses fictional demo data only.
 
-- **Usage at a glance:** see the remaining percentage in the menu bar; click to view all limits.
+- **Remaining-quota ring:** the arc follows your remaining allowance and turns red below 20%. The percentage stays beside it; click for details.
 - **Reset cards:** view the available count and each card's expiry date.
 - **Chinese and English:** click **EN / 中文** at the top right of the panel. Your choice is remembered.
 - **Automatic updates:** every minute on AC power, every 5 minutes on battery; paused while asleep or offline.
@@ -21,7 +21,7 @@ Screenshot uses fictional demo data only.
 
 Requires an **Apple Silicon Mac with macOS 14 or later**, and an installed Codex / ChatGPT desktop app signed in to your account.
 
-1. Download and unzip `Codex-Usage-macOS-arm64.zip`.
+1. Download and unzip the latest `Codex-Usage-VERSION-macOS-arm64.zip`.
 2. Drag `Codex Usage.app` into **Applications**, then open it.
 
 **Upgrade:** quit the old version before replacing the app. **Quit:** click **Quit** in the panel. **Uninstall:** quit, then move the app to Trash.

@@ -5,6 +5,8 @@
 - 优先读取 `rateLimitsByLimitId`；不存在时兼容旧的 `rateLimits`。
 - 剩余比例按 `100 - usedPercent` 计算，限制在 0–100%。缺失数据展示为 `—`。
 - 主数字显示 Codex 主额度中剩余比例最低的周期；周期长度来自服务返回值。
+- 菜单栏圆环与主数字共用剩余额度：从顶部顺时针绘制，100% 为满环，0% 为空环；严格低于 20% 时显示红色，未知额度为空的中性环。
+- 圆环为 16 × 16 pt 矢量图，正常状态使用系统模板图适应菜单栏外观；只有比例变化时才重新生成，没有持续动画或新增定时器。
 - 自动刷新频率只取决于供电状态，展开或收起菜单不改变频率，也不延后已安排的更新；仍可点击“刷新”立即更新。
 - 断网保留最近成功数据，在百分比后显示提示点，详情中明确提示旧数据。
 - 重置时间已过时显示“等待额度更新”，不会自行假设已经恢复为 100%。
@@ -47,7 +49,7 @@
 安装支持 Swift 6 的 Xcode Command Line Tools。项目没有第三方 Swift 包依赖。
 
 ```sh
-./script/check.sh                  # 40 项模型检查 + 32 项运行检查，无需完整 Xcode
+./script/check.sh                  # 48 项模型 + 10 项圆环渲染 + 32 项运行检查，无需完整 Xcode
 ./script/build_and_run.sh          # 构建并运行
 ./script/build_and_run.sh --build-only
 ./script/package.sh                # 以 Release 构建，在 dist/ 生成 app、ZIP 和 SHA-256
@@ -55,10 +57,13 @@
 
 构建目录为 `.build/local`，也可以用 `CODEX_USAGE_BUILD_ROOT` 指定其他位置。日常构建默认为 Debug，可用 `CODEX_USAGE_CONFIGURATION=release` 覆盖；打包始终使用 Release。Codex 项目里的 Run 动作指向同一个构建入口。
 
+版本与构建号以 `script/build_and_run.sh` 生成的 Info.plist 为唯一来源。新增兼容功能增加次版本，修复增加补丁版本，每次发布递增构建号；`script/package.sh` 自动从 App 读取版本并将版本、平台和架构写入 ZIP 文件名。
+
 ## 结构
 
 - `App/`：应用入口、启动和退出生命周期。
 - `Services/StatusItemController.swift`：原生菜单栏按钮和 SwiftUI 弹出面板之间的边界。
+- `Services/StatusItemRing.swift`：按剩余额度绘制菜单栏圆环。
 - `Services/CodexConnection.swift`：串行管理只读 Codex app-server 连接。
 - `Stores/UsageStore.swift`：刷新、错误和数据时效状态。
 - `Services/RefreshScheduler.swift`：单次定时器的创建、时间容差和取消。

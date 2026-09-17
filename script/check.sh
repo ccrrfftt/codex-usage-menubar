@@ -7,6 +7,11 @@ xcrun swiftc -module-cache-path "$CHECK_ROOT/module-cache" \
   "$PROJECT_ROOT"/Sources/CodexUsage/Models/*.swift \
   "$PROJECT_ROOT/Tests/QuotaChecks.swift" -o "$CHECK_ROOT/quota-checks"
 "$CHECK_ROOT/quota-checks"
+xcrun swiftc -swift-version 6 -module-cache-path "$CHECK_ROOT/module-cache" \
+  "$PROJECT_ROOT/Sources/CodexUsage/Models/QuotaRingState.swift" \
+  "$PROJECT_ROOT/Sources/CodexUsage/Services/StatusItemRing.swift" \
+  "$PROJECT_ROOT/Tests/StatusRingChecks.swift" -o "$CHECK_ROOT/status-ring-checks"
+"$CHECK_ROOT/status-ring-checks"
 xcrun swiftc -module-cache-path "$CHECK_ROOT/module-cache" \
   "$PROJECT_ROOT/Tests/FakeCodex.swift" -o "$CHECK_ROOT/fake-codex"
 xcrun swiftc -swift-version 6 -module-cache-path "$CHECK_ROOT/module-cache" \

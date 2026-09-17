@@ -24,6 +24,17 @@ struct DemoImage {
         let content = VStack(alignment: .leading, spacing: 12) {
             Label("演示数据 · SAMPLE DATA", systemImage: "photo.badge.checkmark")
                 .font(.system(size: 11, weight: .semibold)).foregroundStyle(.blue)
+            HStack(spacing: 4) {
+                Text("菜单栏").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Image(nsImage: StatusItemRing.image(for: QuotaRingState(remaining: 72)))
+                    .renderingMode(.template)
+                Text("72%")
+                Spacer().frame(width: 16)
+                Image(nsImage: StatusItemRing.image(for: QuotaRingState(remaining: 18)))
+                    .renderingMode(.original)
+                Text("18%")
+            }.font(.system(size: 12))
             Divider()
             HStack {
                 Text("Codex 用量").font(.system(size: 13, weight: .semibold))
