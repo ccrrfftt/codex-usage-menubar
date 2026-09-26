@@ -117,6 +117,46 @@ struct RuntimeChecks {
         check(store.state.remaining == 90 && finalRequests == 5, "stop cancels pending work and rejects further refreshes")
     }
 
+    static func checkExecutableDiscovery() throws {
+        let files = FileManager.default
+        let root = files.temporaryDirectory.appendingPathComponent("codex-discovery-checks-" + UUID().uuidString)
+        let system = root.appendingPathComponent("Applications")
+        let user = root.appendingPathComponent("User/Applications")
+        defer { try? files.removeItem(at: root) }
+        func fixture(_ path: String, under directory: URL = system, executable: Bool = true) throws -> URL {
+            let url = directory.appendingPathComponent(path)
+            try files.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("#!/bin/sh\nexit 0\n".utf8).write(to: url)
+            try files.setAttributes([.posixPermissions: executable ? 0o700 : 0o600], ofItemAtPath: url.path)
+            return url
+        }
+        func discover(_ fallback: [String] = []) throws -> URL {
+            try CodexConnection.findExecutable(applicationDirectories: [system, user], standalonePaths: fallback)
+        }
+        let legacy = try fixture("ChatGPT.app/Contents/Resources/codex")
+        let payload = try fixture("ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex")
+        let launcher = try fixture("ChatGPT.app/Contents/Resources/codex-cli/bin/codex")
+        check(try discover() == launcher, "current packaged launcher takes precedence over older layouts")
+        try files.removeItem(at: launcher)
+        check(try discover() == payload, "native CLI payload remains usable when the launcher is absent")
+        try files.removeItem(at: payload)
+        check(try discover() == legacy, "legacy desktop layout remains compatible")
+        try files.removeItem(at: legacy)
+        let userLauncher = try fixture("Codex.app/Contents/Resources/codex-cli/bin/codex", under: user)
+        check(try discover() == userLauncher, "Codex-named app in the user Applications directory is discovered")
+        try files.removeItem(at: userLauncher)
+        let standalone = try fixture("Homebrew/bin/codex", under: root)
+        check(try discover([standalone.path]) == standalone, "standalone CLI remains a fallback")
+        let unreadable = try fixture("ChatGPT.app/Contents/Resources/codex-cli/bin/codex", executable: false)
+        check(try discover([standalone.path]) == standalone, "non-executable candidates are skipped")
+        try files.removeItem(at: unreadable)
+        try files.createDirectory(at: launcher, withIntermediateDirectories: true)
+        check(try discover([standalone.path]) == standalone, "directories cannot be selected as executables")
+        var unavailable = false
+        do { _ = try discover() } catch QuotaError.unavailable { unavailable = true }
+        check(unavailable, "missing CLI reports the existing unavailable state")
+    }
+
     static func checkProcess() async throws {
         let executable = URL(fileURLWithPath: CommandLine.arguments[1])
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("codex-usage-checks-" + UUID().uuidString)
@@ -251,6 +291,7 @@ struct RuntimeChecks {
     }
 
     static func main() async throws {
+        try checkExecutableDiscovery()
         try await checkStore()
         try await checkScheduling()
         try await checkLanguageSwitch()

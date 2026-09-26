@@ -40,15 +40,31 @@ final class CodexConnection: QuotaReading, @unchecked Sendable {
         }
     }
 
-    private static func findExecutable() throws -> URL {
-        let candidates = [
-            "/Applications/ChatGPT.app/Contents/Resources/codex",
-            "/Applications/Codex.app/Contents/Resources/codex",
-            "/opt/homebrew/bin/codex", "/usr/local/bin/codex"
+    static func findExecutable(
+        applicationDirectories: [URL] = [
+            URL(fileURLWithPath: "/Applications", isDirectory: true),
+            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true)
+        ],
+        standalonePaths: [String] = ["/opt/homebrew/bin/codex", "/usr/local/bin/codex"]
+    ) throws -> URL {
+        // Prefer the packaged launcher; retain the native payload and older layout
+        // as fallbacks. Resolve on each query so a desktop update needs no restart.
+        let relativePaths = [
+            "Contents/Resources/codex-cli/bin/codex",
+            "Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+            "Contents/Resources/codex"
         ]
-        guard let path = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
-            throw QuotaError.unavailable
-        }
+        let candidates = applicationDirectories.flatMap { directory in
+            ["ChatGPT.app", "Codex.app"].flatMap { app in
+                relativePaths.map { directory.appendingPathComponent(app).appendingPathComponent($0).path }
+            }
+        } + standalonePaths
+        let files = FileManager.default
+        guard let path = candidates.first(where: { path in
+            var isDirectory: ObjCBool = false
+            return files.fileExists(atPath: path, isDirectory: &isDirectory) &&
+                !isDirectory.boolValue && files.isExecutableFile(atPath: path)
+        }) else { throw QuotaError.unavailable }
         return URL(fileURLWithPath: path)
     }
 }

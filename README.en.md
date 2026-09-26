@@ -21,6 +21,8 @@ Screenshot uses fictional demo data only.
 
 Requires an **Apple Silicon Mac with macOS 14 or later**, and an installed Codex / ChatGPT desktop app signed in to your account.
 
+Version 1.6.1 supports the new Codex app layout in both system and user Applications folders, while retaining compatibility with older versions.
+
 1. Download and unzip the latest `Codex-Usage-VERSION-macOS-arm64.zip`.
 2. Drag `Codex Usage.app` into **Applications**, then open it.
 

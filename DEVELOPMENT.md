@@ -44,12 +44,18 @@
 
 重置卡按最早到期顺序显示日期和时间。未返回的明细或到期时间会明确显示为未知，不推断“永久有效”，也不自动消耗卡片。
 
+## Codex 客户端兼容
+
+查询时在系统和个人「应用程序」目录中查找 `ChatGPT.app` / `Codex.app`。优先使用 `Contents/Resources/codex-cli/bin/codex` 启动入口，兼容同目录的 `CodexCLI.app` 原生程序、旧版 `Contents/Resources/codex` 和独立 CLI。忽略目录及没有执行权限的候选项。每次查询重新查找，客户端升级后无需重启监测 App，也不增加后台定时器。
+
+适配目标为 Codex 26.924.22138（build 11645）及其内置 CLI 0.158.0-alpha.2.1。额度字段继续使用官方的 [account/rateLimits/read](https://learn.chatgpt.com/docs/app-server)；新增的可选字段不影响已有额度和重置卡解析。测试样例仅使用虚构数据。
+
 ## 从源码构建
 
 安装支持 Swift 6 的 Xcode Command Line Tools。项目没有第三方 Swift 包依赖。
 
 ```sh
-./script/check.sh                  # 48 项模型 + 10 项圆环渲染 + 32 项运行检查，无需完整 Xcode
+./script/check.sh                  # 49 项模型 + 10 项圆环渲染 + 40 项运行检查，无需完整 Xcode
 ./script/build_and_run.sh          # 构建并运行
 ./script/build_and_run.sh --build-only
 ./script/package.sh                # 以 Release 构建，在 dist/ 生成 app、ZIP 和 SHA-256

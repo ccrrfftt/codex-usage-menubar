@@ -21,6 +21,8 @@
 
 需要 **Apple Silicon Mac、macOS 14+**，并已安装、登录 Codex / ChatGPT 桌面应用。
 
+1.6.1 已适配新版 Codex 的程序目录，支持系统和个人「应用程序」目录，也兼容旧版。
+
 1. 下载并解压最新版的 `Codex-Usage-版本号-macOS-arm64.zip`。
 2. 把 `Codex Usage.app` 拖进「应用程序」，双击打开。
 

@@ -84,6 +84,8 @@ struct QuotaChecks {
         let oldRing = ringState.statusItem.ring
         ringState.lastError = .timedOut
         check(ringState.statusItem.ring == oldRing && ringState.statusItem.title.hasSuffix(" ·"), "stale data retains the ring with the existing stale indicator")
+        let currentSchema = try decode(#"{"accountId":"demo-account","ordinaryUsageAllowed":true,"rateLimitsByLimitId":{"codex":{"primary":{"usedPercent":28,"windowDurationMins":10080},"individualLimit":null,"normalModelSlug":"demo-model","credits":null}},"rateLimitResetCredits":{"availableCount":1,"credits":[{"status":"available","expiresAt":1896048000}]}}"#)
+        check(currentSchema.main?.headline?.remaining == 72 && currentSchema.resetCardCount == 1 && currentSchema.resetCards?.count == 1, "new optional account fields preserve quota and reset-card decoding")
         print("\(checked) checks passed.")
     }
 }
