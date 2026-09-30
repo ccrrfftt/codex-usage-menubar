@@ -71,14 +71,18 @@ struct QuotaSnapshot: Decodable, Sendable {
     let otherBuckets: [QuotaBucket]
     let resetCardCount: Int?
     let resetCards: [ResetCard]?
+    let ordinaryUsageAllowed: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case rateLimits, rateLimitsByLimitId, rateLimitResetCredits
+        case rateLimits, rateLimitsByLimitId, rateLimitResetCredits, ordinaryUsageAllowed
     }
 
     // Normalize once on the query queue, not every time SwiftUI reads the snapshot.
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
+        // Preserve unavailable permission as nil; percentages and reset times
+        // cannot establish whether ordinary included usage is allowed.
+        ordinaryUsageAllowed = try values.decodeIfPresent(Bool.self, forKey: .ordinaryUsageAllowed)
         let mapped = try values.decodeIfPresent([String: QuotaBucket].self, forKey: .rateLimitsByLimitId)
         if let mapped, !mapped.isEmpty {
             main = mapped["codex"]?.identified(by: "codex")

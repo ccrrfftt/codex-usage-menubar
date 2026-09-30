@@ -18,6 +18,7 @@ enum AppLanguage: String, Sendable {
         case title, connecting, remaining, mainLimit, nextReset, resetCards, refresh, quit
         case otherLimits, expanded, collapsed, expandHint, periodUnavailable, resetUnavailable
         case waitingForReset, expiryUnavailable, detailsUnavailable, limitReached, remainingQuota
+        case ordinaryUsageUnavailable
         case offlineStatus, pausedStatus, syncing, waitingForConnection, previousData, efficientUpdates
         case offlineHelp, pausedHelp, acHelp, batteryHelp, updating, notSynced, statusItemLabel
         case errorUnavailable, errorDisconnected, errorTimedOut, errorAccount, errorMalformed
@@ -44,6 +45,7 @@ enum AppLanguage: String, Sendable {
         case .expiryUnavailable: pair = ("未提供到期时间", "Expiry unavailable")
         case .detailsUnavailable: pair = ("暂未返回到期明细", "Expiry details unavailable")
         case .limitReached: pair = ("账户已触及额度或支出限制", "Usage or spending limit reached")
+        case .ordinaryUsageUnavailable: pair = ("常规用量暂不可用，请查看 Codex 用量页面", "Included usage is unavailable. Check usage in Codex.")
         case .remainingQuota: pair = ("剩余额度", "Remaining quota")
         case .offlineStatus: pair = ("离线，联网后更新", "Offline; updates resume when connected")
         case .pausedStatus: pair = ("休眠期间暂停查询", "Updates paused while inactive")

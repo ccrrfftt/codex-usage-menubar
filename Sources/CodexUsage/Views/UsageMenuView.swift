@@ -29,8 +29,9 @@ struct UsageMenuView: View {
                 Text(error).font(.caption2).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if main?.spendControlReached == true || main?.rateLimitReachedType != nil {
-                Text(language.text(.limitReached)).font(.caption2).foregroundStyle(.orange)
+            if let restriction = state.restrictionMessage {
+                Text(restriction).font(.caption2).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let others = state.snapshot?.otherBuckets, !others.isEmpty {
                 OtherQuotasView(buckets: others, language: language)

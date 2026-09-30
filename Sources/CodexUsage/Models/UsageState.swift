@@ -13,6 +13,13 @@ struct UsageState {
     var errorMessage: String? { lastError?.message(in: language) }
 
     var remaining: Double? { snapshot?.main?.headline?.remaining }
+    var restrictionMessage: String? {
+        if snapshot?.ordinaryUsageAllowed == false { return language.text(.ordinaryUsageUnavailable) }
+        if snapshot?.main?.spendControlReached == true || snapshot?.main?.rateLimitReachedType != nil {
+            return language.text(.limitReached)
+        }
+        return nil
+    }
     var stale: Bool {
         lastError != nil || !energy.allowsRefresh ||
             (updatedAt.map { now.timeIntervalSince($0) > (EnergyPolicy.refreshInterval(state: energy) ?? 60) * 2 } ?? true)
@@ -37,12 +44,13 @@ struct UsageState {
     var statusItem: StatusItemState {
         let percent = quotaPercent(remaining, language: language)
         let label = language.text(.statusItemLabel)
+        let restriction = restrictionMessage.map { "\n" + $0 } ?? ""
         return StatusItemState(
             title: percent + (remaining != nil && stale ? " ·" : ""),
             ring: QuotaRingState(remaining: remaining),
-            tooltip: "\(label) \(percent) · \(status)\n\(energyDescription)",
+            tooltip: "\(label) \(percent) · \(status)\(restriction)\n\(energyDescription)",
             accessibilityLabel: label,
-            accessibilityValue: percent)
+            accessibilityValue: percent + restriction)
     }
 }
 

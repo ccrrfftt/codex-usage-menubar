@@ -48,14 +48,19 @@
 
 查询时在系统和个人「应用程序」目录中查找 `ChatGPT.app` / `Codex.app`。优先使用 `Contents/Resources/codex-cli/bin/codex` 启动入口，兼容同目录的 `CodexCLI.app` 原生程序、旧版 `Contents/Resources/codex` 和独立 CLI。忽略目录及没有执行权限的候选项。每次查询重新查找，客户端升级后无需重启监测 App，也不增加后台定时器。
 
-适配目标为 Codex 26.924.22138（build 11645）及其内置 CLI 0.158.0-alpha.2.1。额度字段继续使用官方的 [account/rateLimits/read](https://learn.chatgpt.com/docs/app-server)；新增的可选字段不影响已有额度和重置卡解析。测试样例仅使用虚构数据。
+适配目标为 Codex 26.928.20755（build 12246）及其内置 CLI 0.159.0。额度字段继续使用官方的 [account/rateLimits/read](https://learn.chatgpt.com/docs/app-server)；新增的可选字段不影响已有额度和重置卡解析。测试样例仅使用虚构数据。
+
+解析 `ordinaryUsageAllowed`：明确为 `false` 时，即使剩余比例大于零或重置时间已过，也在面板、菜单栏提示和辅助功能文本中提示常规用量暂不可用；原始百分比保持原值。字段缺失或 `null` 保留为未知，不转成已允许。原有额度/支出限制提示继续生效。菜单栏状态点表示数据新鲜度，不表示账户已获准使用。
+
+实时兼容性检查可运行 `./script/check_live.sh`。该脚本使用生产连接代码执行一次只读查询，只输出检测到的 CLI 版本与验证结果，不输出账户标识、额度数值或卡片明细。它是开发时手动运行的检查，不会加入 App 的后台刷新。
+
 
 ## 从源码构建
 
 安装支持 Swift 6 的 Xcode Command Line Tools。项目没有第三方 Swift 包依赖。
 
 ```sh
-./script/check.sh                  # 49 项模型 + 10 项圆环渲染 + 40 项运行检查，无需完整 Xcode
+./script/check.sh                  # 56 项模型 + 10 项圆环渲染 + 40 项运行检查，无需完整 Xcode
 ./script/build_and_run.sh          # 构建并运行
 ./script/build_and_run.sh --build-only
 ./script/package.sh                # 以 Release 构建，在 dist/ 生成 app、ZIP 和 SHA-256
