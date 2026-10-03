@@ -3,38 +3,57 @@ import Foundation
 enum AccountingSummary {
     static func make(snapshot: AccountingSnapshot?, calendar: AccountingCalendar,
                      reset: AccountingResetTracker, now: Date, folderCount: Int,
-                     language: AppLanguage) -> AccountingPresentation {
+                     language: AppLanguage, trackingStart: Date? = nil) -> AccountingPresentation {
         var result = AccountingPresentation()
+        result.trackingStartedAt = trackingStart
         result.billingDay = calendar.renewalDay
         result.sourceFolderCount = folderCount
+        result.resetWindowMinutes = reset.windowMinutes
         let cycle = calendar.subscriptionCycle(containing: now)
         result.cycleStart = cycle?.start
         result.cycleEnd = cycle?.end
         guard let snapshot else { return result }
         let tokenGaps: Set<AccountingIssue> = [.scopeRequired, .threadListUnavailable,
-            .threadLimitReached, .rolloutUnavailable, .unsupportedHistory, .invalidRecord, .historyCatchingUp]
+            .threadLimitReached, .rolloutUnavailable, .unsupportedHistory, .invalidRecord, .historyCatchingUp, .threadIndexUnavailable, .threadIndexUnsupported, .recursiveCoverageUnavailable]
         let scopeComplete = snapshot.recordsAreComplete && snapshot.issues.isDisjoint(with: tokenGaps)
-        let hasLocal = snapshot.scannedThreadCount > 0
+        let records = snapshot.records.filter { record in
+            record.timestamp <= now && (trackingStart.map { record.timestamp >= $0 } ?? true)
+        }
+        let hasLocal = snapshot.scannedThreadCount > 0 ||
+            (trackingStart != nil && folderCount > 0 && scopeComplete)
+        func localMetric(_ selected: [AccountingUsageRecord], fullPeriod: Bool) -> AccountingMetricPresentation {
+            var value = metric(records: selected, complete: scopeComplete)
+            if !fullPeriod {
+                value.tokensArePartial = true
+                value.costIsPartial = value.apiUSD != nil
+            }
+            return value
+        }
         if hasLocal {
             result.tokenSource = .local
             let today = calendar.today(containing: now)
-            result.today = metric(records: snapshot.records.filter { $0.timestamp >= today.start && $0.timestamp <= now },
-                                  complete: scopeComplete)
+            result.today = localMetric(records.filter { $0.timestamp >= today.start },
+                                       fullPeriod: trackingStart.map { $0 <= today.start } ?? true)
             if let cycle {
-                result.cycle = metric(records: snapshot.records.filter { $0.timestamp >= cycle.start && $0.timestamp <= now },
-                                      complete: scopeComplete)
+                result.cycle = localMetric(records.filter { $0.timestamp >= cycle.start },
+                                           fullPeriod: trackingStart.map { $0 <= cycle.start } ?? true)
             }
             // A manual reset is observed between two polls, not at an invented instant.
             // Count only the records after the upper bound and label that a partial total.
-            if let upper = reset.resetUpperBound, upper <= now {
+            let historical = reset.resetUpperBound == nil
+                ? RecordedResetInference.upperBound(observations: snapshot.quotaObservations.filter { point in
+                    trackingStart.map { point.timestamp >= $0 } ?? true
+                }, current: reset, now: now) : nil
+            if let upper = reset.resetUpperBound ?? historical, upper <= now {
                 result.lastReset = upper
-                result.lastResetLowerBound = reset.resetLowerBound
-                result.sinceReset = metric(records: snapshot.records.filter { $0.timestamp >= upper && $0.timestamp <= now },
-                                           complete: false)
+                result.lastResetFromHistory = historical != nil
+                result.lastResetLowerBound = historical == nil ? reset.resetLowerBound : nil
+                result.sinceReset = localMetric(records.filter { $0.timestamp >= upper }, fullPeriod: false)
+                if historical != nil { result.sinceReset.isEstimated = true }
             }
             result.coverage = snapshot.issues.contains(.historyCatchingUp) ? .loading :
-                (scopeComplete && !snapshot.records.contains(where: { $0.quality == .estimated }) ? .complete : .partial)
-        } else if let buckets = snapshot.account?.dailyUsageBuckets, !buckets.isEmpty {
+                (scopeComplete && !records.contains(where: { $0.quality == .estimated }) ? .complete : .partial)
+        } else if trackingStart == nil, let buckets = snapshot.account?.dailyUsageBuckets, !buckets.isEmpty {
             // Service-date buckets have no published timezone. Approximation is visible;
             // they are never converted to USD without a model/category breakdown.
             let date = DateFormatter()
@@ -51,15 +70,21 @@ enum AccountingSummary {
             result.tokenSource = .account
             result.coverage = .partial
         }
-        result.conversations = snapshot.recentThreads.prefix(3).map { thread in
+        let recent = snapshot.recentThreads.filter { thread in
+            trackingStart.map { thread.recencyAt >= $0 } ?? true
+        }
+        result.conversations = recent.prefix(3).enumerated().map { index, thread in
             let value: AccountingMetricPresentation
-            if let usage = thread.usage, !usage.groups.isEmpty {
+            if trackingStart == nil, let usage = thread.usage, !usage.groups.isEmpty {
                 value = groupMetric(usage.groups)
             } else {
-                value = metric(records: snapshot.records.filter { $0.threadID == thread.id }, complete: scopeComplete)
+                value = metric(records: records.filter { $0.threadID == thread.id }, complete: scopeComplete)
             }
+            let assignedTitle = thread.name?.trimmingCharacters(in: .whitespacesAndNewlines)
             return AccountingConversationPresentation(id: thread.id,
-                title: thread.name ?? language.accountingText(.untitledConversation), updatedAt: thread.updatedAt, metric: value)
+                title: assignedTitle.flatMap { $0.isEmpty ? nil : $0 }
+                    ?? language.accountingConversation(index + 1, updatedAt: thread.recencyAt),
+                updatedAt: thread.updatedAt, metric: value)
         }
         // The comparison explicitly describes selected sources, never whole-account coverage.
         result.canCompareSelectedCycle = hasLocal && scopeComplete && cycle != nil &&

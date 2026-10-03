@@ -4,7 +4,11 @@ import AppKit
 @MainActor
 final class StatusItemLabel: NSView {
     var state: StatusItemState? {
-        didSet { if oldValue != state { needsDisplay = true } }
+        didSet {
+            if oldValue?.title != state?.title || oldValue?.valueTitle != state?.valueTitle || oldValue?.ring != state?.ring {
+                needsDisplay = true
+            }
+        }
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }

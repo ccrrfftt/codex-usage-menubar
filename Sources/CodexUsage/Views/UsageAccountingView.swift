@@ -36,9 +36,17 @@ struct UsageAccountingView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(cycleLabel)
-                .font(.system(size: 10)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(cycleLabel).fixedSize(horizontal: false, vertical: true)
+                if let start = presentation.trackingStartedAt {
+                    Spacer(minLength: 0)
+                    Text(language.accountingTrackingStart(start))
+                        .fixedSize(horizontal: true, vertical: false)
+                        .help(language.dateTime(start, includeYear: true) + "\n"
+                            + language.accountingText(.trackingHelp))
+                }
+            }
+            .font(.system(size: 10)).foregroundStyle(.secondary)
 
             conversations
             Text(language.accountingScope(source: presentation.tokenSource,
@@ -79,7 +87,7 @@ struct UsageAccountingView: View {
     private func metricRow(_ title: AppLanguage.AccountingText,
                            metric: AccountingMetricPresentation, emphasized: Bool = false) -> some View {
         GridRow(alignment: .firstTextBaseline) {
-            Text(language.accountingText(title))
+            Text(title == .sinceReset ? language.accountingResetTitle(minutes: presentation.resetWindowMinutes) : language.accountingText(title))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .gridColumnAlignment(.leading)
                 .help(title == .sinceReset ? resetHelp : language.accountingText(title))
@@ -93,7 +101,7 @@ struct UsageAccountingView: View {
         }
         .font(.system(size: 11, weight: emphasized ? .semibold : .regular))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(language.accountingText(title))
+        .accessibilityLabel(title == .sinceReset ? language.accountingResetTitle(minutes: presentation.resetWindowMinutes) : language.accountingText(title))
         .accessibilityValue(language.accountingMetricDescription(metric))
     }
 
@@ -106,6 +114,10 @@ struct UsageAccountingView: View {
 
     private var resetHelp: String {
         guard let reset = presentation.lastReset else { return language.accountingText(.resetNotObserved) }
+        if presentation.lastResetFromHistory {
+            return language.accountingText(.historicalReset) + " · " + language.dateTime(reset) + "\n"
+                + language.accountingText(.historicalResetHelp)
+        }
         if let lower = presentation.lastResetLowerBound {
             return language.accountingText(.observedResetInterval) + " · "
                 + language.dateTime(lower) + " → " + language.dateTime(reset) + "\n"
@@ -141,7 +153,8 @@ struct UsageAccountingView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(language.accountingText(.recentConversations))
             .accessibilityValue(language.text(showsConversations ? .expanded : .collapsed))
-            .accessibilityHint(language.text(.expandHint))
+            .accessibilityHint(language.text(.expandHint) + " " + language.accountingText(.recentTrackingHelp))
+            .help(language.accountingText(.recentTrackingHelp))
             if showsConversations {
                 if presentation.conversations.isEmpty {
                     Text(language.accountingText(.noConversations))
@@ -171,7 +184,8 @@ struct UsageAccountingView: View {
                 Text(conversation.metric.costText(compact: true))
             }
             .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
-            .help(language.accountingCostHelp(conversation.metric))
+            .help(language.accountingCostHelp(conversation.metric) + "\n"
+                + language.accountingText(.recentTrackingHelp))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)

@@ -7,6 +7,13 @@ protocol QuotaReading: Sendable {
 
 protocol DashboardReading: QuotaReading {
     func readDashboard(allowedWorkingDirectories: [String]) async throws -> DashboardSnapshot
+    func readDashboard(allowedWorkingDirectories: [String], trackingStart: Date?) async throws -> DashboardSnapshot
+}
+
+extension DashboardReading {
+    func readDashboard(allowedWorkingDirectories: [String], trackingStart: Date?) async throws -> DashboardSnapshot {
+        try await readDashboard(allowedWorkingDirectories: allowedWorkingDirectories)
+    }
 }
 
 /// Serial utility work; each read owns and closes its process before returning.
@@ -16,11 +23,16 @@ final class CodexConnection: DashboardReading, @unchecked Sendable {
     private let runtime: URL
     private let timeout: TimeInterval
     private let accountingReader: UsageAccountingReader
+    private let threadIndex: any ThreadIndexReading
+    private let allowExactScopeFallback: Bool
 
     init(executable: URL? = nil, runtime: URL? = nil, timeout: TimeInterval = 25,
-         accountingReader: UsageAccountingReader = UsageAccountingReader()) {
+         accountingReader: UsageAccountingReader = UsageAccountingReader(),
+         threadIndex: any ThreadIndexReading = ScopedThreadIndex(), allowExactScopeFallback: Bool = false) {
         self.executable = executable
         self.accountingReader = accountingReader
+        self.threadIndex = threadIndex
+        self.allowExactScopeFallback = allowExactScopeFallback
         self.runtime = runtime ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("local.codexusage.menubar/runtime", isDirectory: true)
         self.timeout = timeout
@@ -48,6 +60,10 @@ final class CodexConnection: DashboardReading, @unchecked Sendable {
     }
 
     func readDashboard(allowedWorkingDirectories: [String]) async throws -> DashboardSnapshot {
+        try await readDashboard(allowedWorkingDirectories: allowedWorkingDirectories, trackingStart: nil)
+    }
+
+    func readDashboard(allowedWorkingDirectories: [String], trackingStart: Date?) async throws -> DashboardSnapshot {
         try Task.checkCancellation()
         let cancellation = QueryCancellation()
         return try await withTaskCancellationHandler {
@@ -57,9 +73,10 @@ final class CodexConnection: DashboardReading, @unchecked Sendable {
                         try cancellation.check()
                         let session = try QuerySession(executable: self.executable ?? Self.findExecutable(),
                             runtime: self.runtime, timeout: self.timeout, cancellation: cancellation,
-                            scopedAccounting: !allowedWorkingDirectories.isEmpty)
+                            scopedAccounting: self.allowExactScopeFallback && !allowedWorkingDirectories.isEmpty)
                         return try session.readDashboard(allowedWorkingDirectories: allowedWorkingDirectories,
-                                                         reader: self.accountingReader)
+                                                         reader: self.accountingReader, threadIndex: self.threadIndex,
+                                                         allowExactScopeFallback: self.allowExactScopeFallback, trackingStart: trackingStart)
                     }
                     continuation.resume(with: result)
                 }
@@ -167,59 +184,100 @@ private final class QuerySession {
             try send(["method": "initialized"])
     }
 
-    func readDashboard(allowedWorkingDirectories: [String], reader: UsageAccountingReader) throws -> DashboardSnapshot {
+    func readDashboard(allowedWorkingDirectories: [String], reader: UsageAccountingReader,
+                       threadIndex: any ThreadIndexReading, allowExactScopeFallback: Bool, trackingStart: Date?) throws -> DashboardSnapshot {
         defer { close() }
         try initialize()
         let quota: QuotaSnapshot = try call("account/rateLimits/read")
         var issues = Set<AccountingIssue>()
         let account: AccountTokenActivity?
-        do { account = try call("account/usage/read") }
-        catch { try cancellation.check(); account = nil; issues.insert(.accountUsageUnavailable) }
-        let scopes = Array(Set(allowedWorkingDirectories.filter { $0.hasPrefix("/") }
-            .map { URL(fileURLWithPath: $0).standardizedFileURL.path })).sorted()
+        if trackingStart == nil {
+            do { account = try call("account/usage/read") }
+            catch { try cancellation.check(); account = nil; issues.insert(.accountUsageUnavailable) }
+        } else { account = nil }
+        let scopes = AccountingPathScope.roots(allowedWorkingDirectories)
         var descriptors: [AccountingThreadDescriptor] = []
+        let queryDeadline = deadline
+        let queryCancellation = cancellation
+        let mayContinue: @Sendable () -> Bool = {
+            (try? queryCancellation.check()) != nil && ProcessInfo.processInfo.systemUptime < queryDeadline
+        }
         if scopes.isEmpty { issues.insert(.scopeRequired) }
         else {
+            var indexUnavailable = false
             do {
-                for archived in [false, true] {
-                    if descriptors.count >= 1000 { issues.insert(.threadLimitReached); break }
-                    var cursor: String?
-                    var seenCursors = Set<String>()
-                    repeat {
-                        var params: [String: Any] = ["cwd": scopes, "limit": 100, "sortKey": "updated_at",
-                            "sortDirection": "desc", "archived": archived, "useStateDbOnly": true,
-                            "sourceKinds": ["cli", "vscode", "exec", "appServer", "subAgent", "subAgentReview", "subAgentCompact", "subAgentThreadSpawn", "subAgentOther"]]
-                        if let cursor { params["cursor"] = cursor }
-                        let page: AccountingThreadPage = try call("thread/list", params: params)
-                        // Recheck server filtering before any path can reach the reader.
-                        descriptors += page.data.filter { scopes.contains(URL(fileURLWithPath: $0.cwd).standardizedFileURL.path) }
-                        cursor = page.nextCursor
-                        if let cursor, !seenCursors.insert(cursor).inserted { issues.insert(.threadListUnavailable); break }
-                        if descriptors.count >= 1000 { issues.insert(.threadLimitReached); break }
-                    } while cursor != nil
+                let index = try threadIndex.read(allowedRoots: scopes, limit: 1000, trackingStart: trackingStart, shouldContinue: mayContinue)
+                descriptors = index.threads.filter { AccountingPathScope.contains($0.cwd, roots: scopes) }
+                issues.formUnion(index.issues)
+                if descriptors.count != index.threads.count { issues.insert(.invalidRecord) }
+                if !index.isComplete { issues.insert(.recursiveCoverageUnavailable) }
+            } catch ThreadIndexError.interrupted {
+                try cancellation.check(); issues.insert(.historyCatchingUp)
+            } catch ThreadIndexError.unsupportedSchema {
+                issues.insert(.threadIndexUnsupported); indexUnavailable = true
+            } catch {
+                try cancellation.check(); issues.insert(.threadIndexUnavailable); indexUnavailable = true
+            }
+            if indexUnavailable {
+                issues.insert(.recursiveCoverageUnavailable)
+                if allowExactScopeFallback && mayContinue() {
+                    do {
+                        for archived in [false, true] {
+                            if descriptors.count >= 1000 { issues.insert(.threadLimitReached); break }
+                            var cursor: String?
+                            var seenCursors = Set<String>()
+                            repeat {
+                                var params: [String: Any] = ["cwd": scopes, "limit": 100, "sortKey": "updated_at",
+                                    "sortDirection": "desc", "archived": archived, "useStateDbOnly": true, "modelProviders": ["openai"],
+                                    "sourceKinds": ["cli", "vscode", "exec", "appServer", "subAgent", "subAgentReview", "subAgentCompact", "subAgentThreadSpawn", "subAgentOther"]]
+                                if let cursor { params["cursor"] = cursor }
+                                let page: AccountingThreadPage = try call("thread/list", params: params)
+                                // Recheck server filtering before any path can reach the reader.
+                                descriptors += page.data.filter { scopes.contains(AccountingPathScope.normalized($0.cwd) ?? "") }.map {
+                                    AccountingThreadDescriptor(id: $0.id, name: nil, cwd: $0.cwd, path: $0.path,
+                                        createdAt: $0.createdAt, updatedAt: $0.updatedAt, recencyAt: $0.recencyAt,
+                                        forkedFromId: $0.forkedFromId, parentThreadId: $0.parentThreadId)
+                                }
+                                cursor = page.nextCursor
+                                if let cursor, !seenCursors.insert(cursor).inserted { issues.insert(.threadListUnavailable); break }
+                                if descriptors.count >= 1000 { issues.insert(.threadLimitReached); break }
+                            } while cursor != nil
+                        }
+                    } catch { try cancellation.check(); issues.insert(.threadListUnavailable) }
                 }
-            } catch { try cancellation.check(); issues.insert(.threadListUnavailable) }
+            }
         }
         var unique: [String: AccountingThreadDescriptor] = [:]
         for descriptor in descriptors { unique[descriptor.id] = descriptor }
-        descriptors = Array(unique.values)
-        let local = reader.read(threads: descriptors, allowedWorkingDirectories: scopes, accountID: quota.accountId,
+        descriptors = Array(unique.values).filter { thread in
+            trackingStart.map { max(thread.createdAt, thread.updatedAt) >= $0.timeIntervalSince1970 } ?? true
+        }
+        let local = reader.read(threads: descriptors, allowedWorkingDirectories: scopes, accountID: quota.accountId, trackingStart: trackingStart,
             shouldContinue: { (try? self.cancellation.check()) != nil && ProcessInfo.processInfo.systemUptime < self.deadline })
         try cancellation.check()
         issues.formUnion(local.issues)
         var recent: [AccountingThread] = []
-        for thread in descriptors.filter({ $0.parentThreadId == nil }).sorted(by: {
-            ($0.recencyAt ?? $0.updatedAt) > ($1.recencyAt ?? $1.updatedAt)
-        }).prefix(3) {
+        let latestTrackedResponse = Dictionary(grouping: local.records, by: \.threadID)
+            .compactMapValues { $0.map(\.timestamp).max() }
+        let recentDescriptors = descriptors.filter {
+            $0.parentThreadId == nil && (trackingStart == nil || latestTrackedResponse[$0.id] != nil)
+        }.sorted {
+            let lhs = trackingStart == nil ? ($0.recencyAt ?? $0.updatedAt) : latestTrackedResponse[$0.id]!.timeIntervalSince1970
+            let rhs = trackingStart == nil ? ($1.recencyAt ?? $1.updatedAt) : latestTrackedResponse[$1.id]!.timeIntervalSince1970
+            return lhs == rhs ? $0.id < $1.id : lhs > rhs
+        }
+        for thread in recentDescriptors.prefix(3) {
             var usage: AccountingThreadUsage?
-            do {
-                let result: AccountTokenActivity = try call("account/usage/read", params: ["threadId": thread.id])
-                if result.threadUsage?.threadId == thread.id { usage = result.threadUsage }
-                if usage == nil { issues.insert(.conversationUsageUnavailable) }
-            } catch { try cancellation.check(); issues.insert(.conversationUsageUnavailable) }
+            if trackingStart == nil {
+                do {
+                    let result: AccountTokenActivity = try call("account/usage/read", params: ["threadId": thread.id])
+                    if result.threadUsage?.threadId == thread.id { usage = result.threadUsage }
+                    if usage == nil { issues.insert(.conversationUsageUnavailable) }
+                } catch { try cancellation.check(); issues.insert(.conversationUsageUnavailable) }
+            }
             recent.append(AccountingThread(id: thread.id, name: thread.name,
                 updatedAt: Date(timeIntervalSince1970: thread.updatedAt),
-                recencyAt: Date(timeIntervalSince1970: thread.recencyAt ?? thread.updatedAt), usage: usage))
+                recencyAt: trackingStart == nil ? Date(timeIntervalSince1970: thread.recencyAt ?? thread.updatedAt) : latestTrackedResponse[thread.id]!, usage: usage))
         }
         // A service-reported nonempty conversation cannot become a complete local zero
         // if a newer/unsupported rollout shape contains no recognized usage records.
@@ -228,10 +286,11 @@ private final class QuerySession {
             return hasUsage && !local.records.contains { $0.threadID == thread.id }
         }) { issues.insert(.unsupportedHistory) }
         let incomplete: Set<AccountingIssue> = [.scopeRequired, .threadListUnavailable, .threadLimitReached,
-            .rolloutUnavailable, .unsupportedHistory, .invalidRecord, .historyCatchingUp]
+            .rolloutUnavailable, .unsupportedHistory, .invalidRecord, .historyCatchingUp,
+            .threadIndexUnavailable, .threadIndexUnsupported, .recursiveCoverageUnavailable]
         return DashboardSnapshot(quota: quota, accounting: AccountingSnapshot(observedAt: .now, account: account,
             recentThreads: recent, records: local.records, issues: issues, scannedThreadCount: local.scanned,
-            recordsAreComplete: issues.isDisjoint(with: incomplete)))
+            recordsAreComplete: issues.isDisjoint(with: incomplete), quotaObservations: local.quotaObservations))
     }
 
     private struct EmptyResult: Decodable {}

@@ -33,7 +33,7 @@ while let line = readLine() {
                             "outputTokens": 10, "totalTokens": 110, "estimatedUsageCreditsMicros": 100]]]
         }
     case "thread/list":
-        guard params["cwd"] as? [String] == ["/fixture/project"], params["useStateDbOnly"] as? Bool == true,
+        guard params["cwd"] as? [String] == ["/fixture/project"], params["useStateDbOnly"] as? Bool == true, params["modelProviders"] as? [String] == ["openai"],
               params["sourceKinds"] as? [String] == ["cli", "vscode", "exec", "appServer", "subAgent", "subAgentReview", "subAgentCompact", "subAgentThreadSpawn", "subAgentOther"] else { exit(11) }
         let archived = params["archived"] as? Bool == true
         let thread = archived ? "fixture-archived" : "fixture-current"

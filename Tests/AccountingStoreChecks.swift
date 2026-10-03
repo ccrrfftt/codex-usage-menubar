@@ -3,6 +3,7 @@ import Foundation
 
 private actor ControlledDashboardReader: DashboardReading {
     private(set) var scopes: [[String]] = []
+    private(set) var trackingStarts: [Date?] = []
     private(set) var cancelled = Set<Int>()
     private(set) var quotaOnlyReads = 0
     private var pending: [Int: CheckedContinuation<DashboardSnapshot, Error>] = [:]
@@ -10,6 +11,11 @@ private actor ControlledDashboardReader: DashboardReading {
     func read() async throws -> QuotaSnapshot {
         quotaOnlyReads += 1
         throw QuotaError.unavailable
+    }
+
+    func readDashboard(allowedWorkingDirectories: [String], trackingStart: Date?) async throws -> DashboardSnapshot {
+        trackingStarts.append(trackingStart)
+        return try await readDashboard(allowedWorkingDirectories: allowedWorkingDirectories)
     }
 
     func readDashboard(allowedWorkingDirectories: [String]) async throws -> DashboardSnapshot {
@@ -107,8 +113,8 @@ struct AccountingStoreChecks {
                   && store.state.accountingPresentation.cycle.tokens == 500,
                   "renewal today excludes the previous day's usage while today remains correct")
         store.setBillingDay(day == 1 ? 31 : day - 1)
-        try check(store.state.accountingPresentation.cycle.tokens == 750,
-                  "changing the cycle boundary recomputes the period from existing records")
+        try check(store.state.accountingPresentation.cycle.tokens == 500 && store.state.accountingPresentation.cycle.tokensArePartial,
+                  "changing billing day never imports pre-tracking history or hides missing cycle days")
         let today = store.state.accountingPresentation.today
         store.setBillingDay(0)
         try check(store.state.accountingPresentation.cycle.tokens == nil
@@ -203,10 +209,16 @@ struct AccountingStoreChecks {
         defer { store.stop() }
         try check(store.state.accountingPresentation.billingDay == 5 && store.state.language == .english,
                   "an isolated preference suite restores renewal day and language without querying")
+        let expectedStart = AccountingCalendar(renewalDay: nil).today(containing: .now).start
+        try check(preferences.double(forKey: "accountingTrackingStart") == expectedStart.timeIntervalSince1970 &&
+                  store.state.accountingPresentation.trackingStartedAt == expectedStart,
+                  "first launch persists today's local midnight before any query or app termination")
         let reset = Date.now.addingTimeInterval(3_600)
         store.setAccountingFolders([folderA, folderA + "/../synthetic-accounting-project-a", "relative-invalid"])
         try await waitFor { await reader.scopes.count == 1 }
         try check(await reader.scopes[0] == [folderA], "scope preferences deduplicate normalized absolute paths")
+        try check(await reader.trackingStarts[0] == expectedStart,
+                  "the query receives the same persisted prospective cutoff as the presentation")
         await reader.resolve(0, try fixture("persist", used: 80, reset: reset))
         try await waitFor { !store.state.isRefreshing }
         clock.value += 6
@@ -239,6 +251,9 @@ struct AccountingStoreChecks {
         try check(second.state.accountingPresentation.billingDay == 17
                   && second.state.accountingPresentation.sourceFolderCount == 1 && second.state.language == .chinese,
                   "a new Store restores persisted settings without carrying old displayed records")
+        try check(second.state.accountingPresentation.trackingStartedAt == expectedStart &&
+                  reopened.double(forKey: "accountingTrackingStart") == expectedStart.timeIntervalSince1970,
+                  "reopening preserves the initial tracking date instead of starting over")
         second.refresh()
         try await waitFor { await secondReader.scopes.count == 1 }
         await secondReader.resolve(0, try fixture("restored", used: 2, reset: advanced))
@@ -277,10 +292,30 @@ struct AccountingStoreChecks {
                   "retired query cleanup finishes without restoring removed records")
     }
 
+    static func earlierTrackingStartSurvivesRelaunch() throws {
+        let suite = "local.codexusage.tests.tracking." + UUID().uuidString
+        let preferences = UserDefaults(suiteName: suite)!
+        defer { preferences.removePersistentDomain(forName: suite); preferences.synchronize() }
+        let earlier = AccountingCalendar(renewalDay: nil).today(containing: .now).start.addingTimeInterval(-3 * 86_400)
+        preferences.set(earlier.timeIntervalSince1970, forKey: "accountingTrackingStart")
+        let store = UsageStore(connection: ControlledDashboardReader(), monitor: nil,
+                               scheduler: AccountingTestScheduler(), preferences: preferences, startImmediately: false)
+        try check(store.state.accountingPresentation.trackingStartedAt == earlier,
+                  "a launch on a later day retains the original tracking start")
+        store.stop()
+        preferences.set(Date.now.addingTimeInterval(86_400).timeIntervalSince1970, forKey: "accountingTrackingStart")
+        let repaired = UsageStore(connection: ControlledDashboardReader(), monitor: nil,
+                                  scheduler: AccountingTestScheduler(), preferences: preferences, startImmediately: false)
+        try check(repaired.state.accountingPresentation.trackingStartedAt == AccountingCalendar(renewalDay: nil).today(containing: .now).start,
+                  "a corrupt future tracking date is repaired instead of suppressing new records")
+        repaired.stop()
+    }
+
     static func main() async throws {
         try await billingAndLanguage()
         try await replaceAndClearScopes()
         try await isolatedPersistence()
+        try earlierTrackingStartSurvivesRelaunch()
         try await quitAfterScopeCancellation()
         print("\(checked) accounting Store checks passed.")
     }

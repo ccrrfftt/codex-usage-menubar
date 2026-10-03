@@ -74,9 +74,12 @@ struct AccountingPresentation: Equatable, Sendable {
     var cycleEnd: Date? = nil
     var lastReset: Date? = nil
     var lastResetLowerBound: Date? = nil
+    var lastResetFromHistory = false
+    var resetWindowMinutes: Double? = nil
     var sourceFolderCount = 0
     /// This compares only the selected records; it never asserts whole-account coverage.
     var canCompareSelectedCycle = false
+    var trackingStartedAt: Date? = nil
 
     static let empty = AccountingPresentation()
 }

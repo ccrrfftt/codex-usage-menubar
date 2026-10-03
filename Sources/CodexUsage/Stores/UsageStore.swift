@@ -19,6 +19,7 @@ final class UsageStore: ObservableObject {
     private var stopped = false
     private var accountingSnapshot: AccountingSnapshot?
     private var billingDay: Int?
+    private let trackingStart: Date
     private var accountingFolders: [String] = []
     private var resetTracker = AccountingResetTracker()
     private var folderPanel: NSOpenPanel?
@@ -39,6 +40,14 @@ final class UsageStore: ObservableObject {
         self.scheduler = scheduler
         self.preferences = preferences
         self.uptime = uptime
+        let started = Date.now
+        let savedStart = preferences?.double(forKey: "accountingTrackingStart") ?? 0
+        if savedStart.isFinite && savedStart > 0 && savedStart <= started.timeIntervalSince1970 {
+            trackingStart = Date(timeIntervalSince1970: savedStart)
+        } else {
+            trackingStart = AccountingCalendar(renewalDay: nil).today(containing: started).start
+            preferences?.set(trackingStart.timeIntervalSince1970, forKey: "accountingTrackingStart")
+        }
         state = UsageState(energy: monitor?.state ?? EnergyState(),
                            language: AppLanguage.restored(from: preferences?.string(forKey: AppLanguage.preferenceKey)))
         monitor?.onChange = { [weak self] state in self?.updateSystemState(state) }
@@ -88,11 +97,12 @@ final class UsageStore: ObservableObject {
         next.now = .now
         state = next
         let scopes = accountingFolders
+        let cutoff = trackingStart
         refreshTask = Task { [weak self, connection] in
             let result: Result<RefreshPayload, Error>
             do {
                 if let dashboardReader = connection as? any DashboardReading {
-                    let dashboard = try await dashboardReader.readDashboard(allowedWorkingDirectories: scopes)
+                    let dashboard = try await dashboardReader.readDashboard(allowedWorkingDirectories: scopes, trackingStart: cutoff)
                     result = .success(RefreshPayload(quota: dashboard.quota, accounting: dashboard.accounting))
                 } else {
                     result = .success(RefreshPayload(quota: try await connection.read(), accounting: nil))
@@ -161,7 +171,7 @@ final class UsageStore: ObservableObject {
             resetTracker.observe(accountID: snapshot.accountId, window: window, at: next.now)
             next.accountingPresentation = AccountingSummary.make(snapshot: accountingSnapshot,
                 calendar: AccountingCalendar(renewalDay: billingDay), reset: resetTracker,
-                now: next.now, folderCount: accountingFolders.count, language: next.language)
+                now: next.now, folderCount: accountingFolders.count, language: next.language, trackingStart: trackingStart)
             next.updatedAt = next.now
             next.lastError = nil
             failures = 0
@@ -187,6 +197,9 @@ final class UsageStore: ObservableObject {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
         panel.canCreateDirectories = false
+        if let currentRoot = accountingFolders.first {
+            panel.directoryURL = URL(fileURLWithPath: currentRoot, isDirectory: true)
+        }
         panel.title = state.language.accountingText(.recordSources)
         panel.message = state.language == .chinese
             ? "只统计所选项目目录对应的对话用量记录。"
@@ -221,7 +234,7 @@ final class UsageStore: ObservableObject {
     private func updateAccountingPresentation() {
         let presentation = AccountingSummary.make(snapshot: accountingSnapshot,
             calendar: AccountingCalendar(renewalDay: billingDay), reset: resetTracker,
-            now: state.now, folderCount: accountingFolders.count, language: state.language)
+            now: state.now, folderCount: accountingFolders.count, language: state.language, trackingStart: trackingStart)
         if state.accountingPresentation != presentation { state.accountingPresentation = presentation }
     }
 

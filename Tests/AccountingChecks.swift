@@ -73,6 +73,68 @@ struct AccountingChecks {
         fork.consume(request(), descriptor: descriptor(fork: "parent", created: created))
         check(fork.records.isEmpty, "fork inherited responses before creation are excluded")
 
+        var indexedFork = AccountingRolloutParser()
+        indexedFork.consume(line("session_meta", ["forked_from_id": "synthetic-parent", "base_instructions": "ignored fixture"]), descriptor: descriptor(created: created))
+        indexedFork.consume(context(), descriptor: descriptor(created: created))
+        indexedFork.consume(request(), descriptor: descriptor(created: created))
+        check(indexedFork.records.isEmpty, "indexed fork uses metadata boolean without exposing parent identity")
+
+        let quotaPayload: [String: Any] = ["limit_id": "codex",
+            "primary": ["used_percent": 10, "window_minutes": 300, "resets_at": 1790996400],
+            "secondary": ["used_percent": 30, "window_minutes": 10080, "resets_at": 1791504000]]
+        let quotaOnly = line("event_msg", ["type": "token_count", "info": NSNull(), "rate_limits": quotaPayload])
+        var quotaParser = AccountingRolloutParser()
+        quotaParser.consume(quotaOnly, descriptor: d)
+        quotaParser.consume(quotaOnly, descriptor: d)
+        check(quotaParser.records.isEmpty && quotaParser.quotaObservations.count == 1, "quota-only events survive null usage and duplicate replay")
+        check(quotaParser.quotaObservations.first?.window.windowDurationMins == 10080, "historical observation keeps the longest valid Codex window")
+        var unrelatedQuota = quotaPayload; unrelatedQuota["limit_id"] = "codex_other"
+        quotaParser.consume(line("event_msg", ["type": "token_count", "rate_limits": unrelatedQuota]), descriptor: d)
+        var unidentifiedQuota = quotaPayload; unidentifiedQuota.removeValue(forKey: "limit_id")
+        quotaParser.consume(line("event_msg", ["type": "token_count", "rate_limits": unidentifiedQuota]), descriptor: d)
+        check(quotaParser.quotaObservations.count == 1, "unidentified and separate model allowances do not become main quota evidence")
+        quotaParser.consume(line("event_msg", ["type": "token_count", "rate_limits": "malformed fixture", "info": ["total_token_usage": tokens(100, 10), "last_token_usage": tokens(100, 10)]]), descriptor: d)
+        check(quotaParser.records.count == 1 && quotaParser.issues.isEmpty, "malformed optional quota preserves otherwise valid token usage")
+        var forkQuotaParser = AccountingRolloutParser()
+        forkQuotaParser.consume(line("session_meta", ["forked_from_id": "synthetic-parent"]), descriptor: descriptor(created: created))
+        forkQuotaParser.consume(quotaOnly, descriptor: descriptor(created: created))
+        check(forkQuotaParser.quotaObservations.isEmpty, "fork inherited quota headers cannot bootstrap a child's reset")
+
+        // Local midnight in UTC+8 is the prior UTC date at 16:00.
+        let trackingStart = ISO8601DateFormatter().date(from: "2026-10-02T16:00:00Z")!
+        var prospectiveParser = AccountingRolloutParser(trackingStart: trackingStart)
+        prospectiveParser.consume(context(), descriptor: d)
+        prospectiveParser.consume(request("old-exact"), descriptor: d)
+        prospectiveParser.consume(legacy(tokens(1000, 100), at: "2026-10-02T15:59:59Z"), descriptor: d)
+        prospectiveParser.consume(quotaOnly, descriptor: d)
+        check(prospectiveParser.records.isEmpty && prospectiveParser.quotaObservations.isEmpty, "pre-cutoff usage and quota snapshots are omitted")
+        prospectiveParser.consume(legacy(tokens(1100, 110), last: tokens(100, 10), at: "2026-10-02T16:00:00Z"), descriptor: d)
+        check(prospectiveParser.records.count == 1 && prospectiveParser.records.first?.totalTokens == 110, "resumed old turn counts only the increment exactly at local midnight")
+        check(prospectiveParser.records.first?.model == "fixture-model", "pre-cutoff context remains available for post-cutoff pricing")
+        var firstPost = AccountingRolloutParser(trackingStart: trackingStart)
+        firstPost.consume(legacy(tokens(1_000_100, 100_010), last: tokens(100, 10), at: "2026-10-02T16:00:01Z"), descriptor: d)
+        check(firstPost.records.first?.totalTokens == 110, "a first observed lifetime counter is never counted as today's total")
+        var boundaryExact = AccountingRolloutParser(trackingStart: trackingStart)
+        boundaryExact.consume(context(), descriptor: d)
+        boundaryExact.consume(request("old-exact"), descriptor: d)
+        boundaryExact.consume(line("token_usage_record", ["response_id": "midnight-response", "thread_id": d.id, "turn_id": "fixture-turn", "usage": tokens(100, 10)], at: "2026-10-02T16:00:00Z"), descriptor: d)
+        check(boundaryExact.records.count == 1 && boundaryExact.records.first?.quality == .reported, "exact request at midnight is included once without old responses")
+
+        var oldMalformed = AccountingRolloutParser(trackingStart: trackingStart)
+        oldMalformed.consume(context(), descriptor: d)
+        oldMalformed.consume(legacy(tokens(1000, 100), at: "2026-10-02T15:00:00Z"), descriptor: d)
+        oldMalformed.consume(line("event_msg", ["type": "token_count", "info": "malformed old fixture"], at: "2026-10-02T15:59:59Z"), descriptor: d)
+        oldMalformed.consume(legacy(tokens(1_000_100, 100_010), last: tokens(100, 10), at: "2026-10-02T16:00:01Z"), descriptor: d)
+        check(oldMalformed.records.first?.totalTokens == 110 && oldMalformed.issues.isEmpty, "malformed pre-cutoff usage drops its baseline without contaminating today's coverage")
+        check(oldMalformed.records.first?.model == "fixture-model", "bad historical usage does not discard a valid model context")
+        var oldRollback = AccountingRolloutParser(trackingStart: trackingStart)
+        oldRollback.consume(legacy(tokens(1000, 100), at: "2026-10-02T14:00:00Z"), descriptor: d)
+        oldRollback.consume(legacy(tokens(500, 50), at: "2026-10-02T15:59:59Z"), descriptor: d)
+        oldRollback.consume(legacy(tokens(600, 60), last: tokens(100, 10), at: "2026-10-02T16:00:01Z"), descriptor: d)
+        check(oldRollback.records.first?.totalTokens == 110 && oldRollback.issues.isEmpty, "historical counter rollback establishes a fresh prospective baseline")
+        oldMalformed.consume(line("event_msg", ["type": "token_count", "info": "malformed current fixture"], at: "2026-10-02T17:00:00Z"), descriptor: d)
+        check(oldMalformed.issues.contains(.invalidRecord), "malformed post-cutoff usage remains a coverage gap")
+
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("accounting-fixtures-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -128,6 +190,47 @@ struct AccountingChecks {
         check(cachedBeforeRejection.records.count == 1, "valid source is cached before rejection regression")
         let rejectedCached = reader.read(threads: [descriptor(path: symlink.path)], allowedWorkingDirectories: ["/fixture/project"], accountID: "different-account")
         check(rejectedCached.records.isEmpty, "a newly invalid path drops its old cached counters")
+
+        let nested = AccountingThreadDescriptor(id: fd.id, name: nil, cwd: "/fixture/project/nested", path: file.path,
+            createdAt: 0, updatedAt: 100, recencyAt: nil, forkedFromId: nil, parentThreadId: nil)
+        let recursive = reader.read(threads: [nested], allowedWorkingDirectories: ["/fixture/project"], accountID: "different-account")
+        check(recursive.records.count == 1, "reader accepts indexed descendants under an authorized root")
+        let sibling = AccountingThreadDescriptor(id: fd.id, name: nil, cwd: "/fixture/project-sibling", path: file.path,
+            createdAt: 0, updatedAt: 100, recencyAt: nil, forkedFromId: nil, parentThreadId: nil)
+        let siblingResult = reader.read(threads: [sibling], allowedWorkingDirectories: ["/fixture/project"], accountID: "different-account")
+        check(siblingResult.records.isEmpty, "reader independently rejects sibling prefixes after a cached import")
+
+        let quotaFile1 = root.appendingPathComponent("quota-one.jsonl"), quotaFile2 = root.appendingPathComponent("quota-two.jsonl")
+        try (quotaOnly + Data([10])).write(to: quotaFile1)
+        try (quotaOnly + Data([10])).write(to: quotaFile2)
+        let quotaMerged = reader.read(threads: [descriptor(id: "quota-one", path: quotaFile1.path), descriptor(id: "quota-two", path: quotaFile2.path)],
+            allowedWorkingDirectories: ["/fixture/project"], accountID: "fixture-account")
+        check(quotaMerged.quotaObservations.count == 1, "identical quota snapshots deduplicate across scoped files")
+
+        let prospectiveFile = root.appendingPathComponent("prospective.jsonl")
+        let beforeLine = line("token_usage_record", ["response_id": "before-midnight", "thread_id": d.id, "turn_id": "fixture-turn", "usage": tokens(100, 10)], at: "2026-10-02T15:59:59Z")
+        let afterLine = line("token_usage_record", ["response_id": "after-midnight", "thread_id": d.id, "turn_id": "fixture-turn", "usage": tokens(100, 10)], at: "2026-10-02T16:00:00Z")
+        let laterLine = line("token_usage_record", ["response_id": "later-response", "thread_id": d.id, "turn_id": "fixture-turn", "usage": tokens(100, 10)], at: "2026-10-02T17:00:00Z")
+        try (context() + Data([10]) + beforeLine + Data([10]) + afterLine + Data([10]) + laterLine + Data([10])).write(to: prospectiveFile)
+        let continued = AccountingThreadDescriptor(id: d.id, name: nil, cwd: "/fixture/project", path: prospectiveFile.path,
+            createdAt: 100, updatedAt: trackingStart.timeIntervalSince1970 + 3600, recencyAt: nil, forkedFromId: nil, parentThreadId: nil)
+        let prospectiveReader = UsageAccountingReader(allowedSessionRoots: [root])
+        let fromMidnight = prospectiveReader.read(threads: [continued], allowedWorkingDirectories: ["/fixture/project"], accountID: "fixture", trackingStart: trackingStart)
+        check(fromMidnight.records.count == 2, "continued old conversation imports only today's exact responses")
+        let laterStart = trackingStart.addingTimeInterval(3600)
+        let fromLater = prospectiveReader.read(threads: [continued], allowedWorkingDirectories: ["/fixture/project"], accountID: "fixture", trackingStart: laterStart)
+        check(fromLater.records.map(\.id) == ["response:later-response"], "cutoff change clears cached earlier records")
+        let restartReader = UsageAccountingReader(allowedSessionRoots: [root])
+        let restarted = restartReader.read(threads: [continued], allowedWorkingDirectories: ["/fixture/project"], accountID: "fixture", trackingStart: trackingStart)
+        check(restarted.records == fromMidnight.records, "cold restart replays the same prospective records")
+        let newAppend = try FileHandle(forWritingTo: prospectiveFile)
+        try newAppend.seekToEnd(); try newAppend.write(contentsOf: laterLine + Data([10])); try newAppend.close()
+        let replayed = restartReader.read(threads: [continued], allowedWorkingDirectories: ["/fixture/project"], accountID: "fixture", trackingStart: trackingStart)
+        check(replayed.records.count == 2, "post-cutoff append replay remains idempotent")
+        let inactive = AccountingThreadDescriptor(id: "inactive", name: nil, cwd: "/fixture/project", path: nil,
+            createdAt: 100, updatedAt: 200, recencyAt: nil, forkedFromId: nil, parentThreadId: nil)
+        let skipped = restartReader.read(threads: [inactive], allowedWorkingDirectories: ["/fixture/project"], accountID: "fixture", trackingStart: trackingStart)
+        check(skipped.records.isEmpty && skipped.scanned == 0 && skipped.issues.isEmpty, "inactive pre-cutoff descriptor is skipped before any log-path access")
 
         let account = try JSONDecoder().decode(AccountTokenActivity.self, from: Data(#"{"summary":{"lifetimeTokens":null},"dailyUsageBuckets":null}"#.utf8))
         check(account.summary.lifetimeTokens == nil && account.dailyUsageBuckets == nil, "unavailable account metrics are not zero")

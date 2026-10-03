@@ -8,26 +8,32 @@ Status: implementation in progress; desktop acceptance and release are pending.
 | --- | --- | --- |
 | Menu bar | Remaining ring and percentage, cycle API-equivalent USD below it | Small system type; vertically centered; no application-name text |
 | Menu bar | Red when remaining quota is strictly below 15% | 14.9% red; 15% neutral; unknown neutral |
-| Ring | Center `!` when current subscription-cycle API equivalent is below USD 200 | Must represent the subscription account, not just selected folders; complete coverage and price bounds must support the comparison |
-| Panel | Today, since last actual quota reset, current subscription cycle | Tokens and API-equivalent USD for each; expose missing records and uncertain boundaries |
-| Panel | Latest three conversations | Cumulative tokens and model-specific equivalent for the latest conversations in the requested account scope |
+| Ring | Center `!` when current subscription-cycle API equivalent is below USD 200 | Uses the user-confirmed local project scope; a full tracked cycle and price bounds must support the comparison |
+| Panel | Today, since the last observed quota reset, current subscription cycle | Tokens and API-equivalent USD for each; expose missing records and uncertain boundaries |
+| Panel | Latest three conversations | Tokens accumulated since tracking began, and model-specific equivalents, for the latest conversations in the selected local scope |
 | Settings | Monthly renewal day | Configurable 1–31, month-end clamping, local timezone; no private billing date in public defaults |
-| Sources | Historical per-model accounting | Explicit folder scope; no global conversation scan; no authentication-file access |
+| Sources | Historical per-model accounting | Start at local midnight on first activation and persist that start; selected roots include descendants; no message preview or authentication-file access |
 
 The value is a comparison with current published Standard API prices, not an invoice, a subscription charge or a savings claim. Cached input and cache writes must be distinguished. Reasoning tokens already included in output are not billed again. Request context thresholds must never be applied to accumulated session totals.
 
-## Current implementation is partial
+## Confirmed scope and start boundary
 
-Selected-folder accounting is an explicit partial-data mode, not a replacement
-for the requested whole-account subscription statistics. It cannot prove the
-account-wide $200 comparison or the latest three conversations across devices.
-Those requirements remain open until an authoritative account-level source or
-an explicitly agreed coverage definition is available. The original objective
-must not be marked complete solely because scoped fixtures pass.
+The accepted scope is usage recorded on this Mac for selected project roots and
+their descendants. Records from other devices or outside those roots are not
+required. Complete historical backfill is not required: tracking starts at local
+midnight on initial activation, and that timestamp persists across later launches.
+An existing conversation resumed after the start contributes only its new usage.
+
+The first subscription cycle may start before tracking. Its known subtotal is
+marked partial, so it cannot assert the full cycle is below $200. The first fully
+tracked cycle can enable the comparison when coverage and prices are sufficient.
+Recent conversations show their accumulated usage since tracking began, not old
+lifetime totals from the service. Missing records or unknown prices remain visible.
 
 The quota API reports the next reset but no authoritative historical last-reset
-instant. The current observed interval is useful evidence with a visible gap;
-it does not reconstruct an unavailable past reset.
+instant. A reset observed after tracking begins supplies a polling interval;
+records after its upper bound form a disclosed subtotal. Before usable reset
+evidence exists, that row remains unavailable rather than inventing a boundary.
 
 ## Existing behavior to preserve
 

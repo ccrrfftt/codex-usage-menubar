@@ -105,5 +105,58 @@ marked fictional and are not desktop-interaction evidence.
 
 Actual click, anchoring, focus and relaunch verification remains pending because
 no Computer/CUA tool is callable in the development session. No stable release
-or claim of interactive acceptance is made at this checkpoint. Historical
-personal-source verification also awaits an explicit directory scope.
+or claim of interactive acceptance is made at this checkpoint. The user has now authorized a recursive project root; its matching and import
+logic have been tested with synthetic SQLite databases and log fixtures. Actual
+historical-source coverage has not yet been accepted in the running app.
+
+
+## Iteration 4: recursive history and reset provenance
+
+The selected source now includes descendant project directories, using a
+read-only index query with exact path-component boundaries. It does not walk
+project contents. Index checks cover archived records, WAL visibility,
+Unicode paths, cancellation, unavailable schemas and explicit coverage limits.
+The query does not retrieve conversation messages, previews or titles; recent
+conversations receive a localized date-and-time label when no name is supplied.
+
+Historical numeric quota observations can bootstrap an estimated last-reset
+boundary. Stronger live observations take precedence. The row names its quota
+window, and its tooltip distinguishes historical inference from an observed
+interval. The offline light fixture demonstrates the approximate marker; the
+dark fixture demonstrates a partial post-reset total.
+
+The source picker starts at its existing selection. Menu-bar label drawing now
+skips tooltip-only changes. The separate interactive QA harness compiles the
+production store, scheduler, status item and views, with a synthetic data reader
+and an isolated preference domain. Its build does not launch an app. See
+[UI testing](UI_TESTING.md) for scenarios and the outstanding Computer checks.
+
+Verification on 2026-10-03: `script/check.sh` completed with 330 passing
+synthetic checks. `script/run_ui_fixture.sh --build-only` compiled the
+interactive harness; plist, ad-hoc signature and embedded-path checks passed.
+`script/render_demo.sh` produced the updated four bilingual light/dark panels
+and both status-boundary strips. These results still do not establish desktop
+interaction or actual personal-history coverage.
+
+
+## Iteration 5: prospective tracking
+
+The accepted scope now starts on the first activation day within the chosen
+local roots. Complete earlier history and other-device usage are not required.
+The saved date survives relaunch. A compact tracking-date label shares the cycle
+line; Chinese and English light/dark offline fixtures were inspected without
+adding height. Light fixtures show the first partial cycle, with no center mark;
+dark fixtures show a fully tracked cycle. Hover text explains both the fixed
+start and the recent-conversation totals.
+
+Calendar and summary checks cover known zero after a successful empty scan,
+exclusion of earlier records and lifetime service totals, an incomplete initial
+cycle, and enabling the comparison in the next complete cycle. Store checks
+verify that the start is persisted before any request and restored on later days.
+These additions do not replace the pending Computer-tool acceptance.
+
+Final prospective checkpoint: all 364 synthetic checks pass, including 53 parser,
+38 scoped-index, 34 store and 33 aggregation checks. The interactive QA bundle
+compiles and its local signature verifies. Its controls have not been exercised
+with the required Computer tool. The README image is an inspected fictional
+fixture with non-pixel metadata removed; it is not a live account screenshot.

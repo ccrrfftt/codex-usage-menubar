@@ -88,7 +88,7 @@
 
 ## 隐私与范围
 
-调用本机 Codex 程序的初始化、`account/rateLimits/read`、`account/usage/read`；选择目录后只使用带精确 `cwd` 过滤的 `thread/list`，读取对应本机用量记录的数值字段。不会全盘枚举对话，不保存消息正文，也不发起模型请求、兑换重置券、购买额度或修改登录。认证由 Codex 自己处理，应用不读取或复制登录凭据。完整边界见 [统计说明](docs/ACCOUNTING.md)。
+调用本机 Codex 程序的初始化、`account/rateLimits/read`、`account/usage/read`；选择根目录后以只读索引查询其下的会话工作目录，再读取对应本机用量记录的数值字段；正常路径不调用 `thread/list`。不会全盘枚举对话，不保存消息正文，也不发起模型请求、兑换重置券、购买额度或修改登录。认证由 Codex 自己处理，应用不读取或复制登录凭据。完整边界见 [统计说明](docs/ACCOUNTING.md)。
 
 额度仅留在内存中。独立运行状态位于当前用户缓存目录的 `local.codexusage.menubar` 中；删除这个工具不会删除或退出你的 Codex 账户。
 
@@ -103,3 +103,13 @@
 公开截图由 `./script/render_demo.sh` 离线生成，使用固定的虚构额度和日期，并标注演示数据。渲染器不读取账户、登录凭据或本机 Codex，也不访问网络。
 
 发布前仍需检查提交邮箱、全部待公开历史、配置与文档、图片元数据和最终附件。路径检查不能替代完整的密钥与个人信息检查；提交使用 GitHub noreply 邮箱。
+
+### Prospective accounting
+
+Production tracking persists `accountingTrackingStart` at the first local day and
+passes it through `UsageStore` to the dashboard reader. The local index excludes
+inactive pre-start threads before applying its cap. Parsing keeps pre-start
+context and legacy baselines while discarding old usage; summaries independently
+enforce the cutoff and never substitute lifetime service totals. No additional
+timer or model request is introduced. The first partial cycle cannot show the
+`!` comparison until a full tracked cycle is available.

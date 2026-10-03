@@ -9,14 +9,14 @@ This development branch is **1.7.0**, not yet released. The download link still 
 **[Download the latest version](https://github.com/ccrrfftt/codex-usage-menubar/releases/latest)**
 
 <p align="center">
-  <img src="Assets/screenshot.png" alt="Codex Usage menu bar app showing remaining quota, reset times, and reset-card expiry dates" width="360">
+  <img src="Assets/screenshot.png" alt="Codex Usage menu bar app showing remaining quota, reset times, token totals, API equivalents, and reset-card expiry dates" width="360">
 </p>
 
 Screenshot uses fictional demo data only.
 
 - **Remaining-quota ring:** the arc follows your remaining allowance and turns red below 15%. The percentage stays beside it; click for details.
-- **Tokens and API equivalents:** today, after the observed reset interval, the subscription cycle, and the last three conversations in selected sources. Configure your renewal day.
-- **Explicit scope:** only selected project usage records are read. `≈` means estimated, `≥` a known lower bound, and `—` unavailable. Values use current Standard API prices, not billed charges.
+- **Tokens and API equivalents:** track today, after an observed reset, the subscription cycle, and the last three conversations from the first activation day. The start survives relaunch; configure your renewal day.
+- **Explicit scope:** usage records for selected project roots and their descendants are read. `≈` means estimated, `≥` a known lower bound, and `—` unavailable. Values use current Standard API prices, not billed charges.
 - **Reset cards:** view the available count and each card's expiry date.
 - **Chinese and English:** click **EN / 中文** at the top right of the panel. Your choice is remembered.
 - **Automatic updates:** every minute on AC power, every 5 minutes on battery; paused while asleep or offline.

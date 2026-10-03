@@ -62,6 +62,7 @@ enum AccountingIssue: String, Sendable, Hashable {
     case scopeRequired, accountUsageUnavailable, threadListUnavailable
     case threadLimitReached, rolloutUnavailable, unsupportedHistory
     case invalidRecord, estimatedUsage, missingModel, missingCacheCounts, historyCatchingUp
+    case threadIndexUnavailable, threadIndexUnsupported, recursiveCoverageUnavailable
     case conversationUsageUnavailable
 }
 
@@ -84,6 +85,7 @@ struct AccountingSnapshot: Sendable {
     /// Completeness refers only to the explicitly selected local directories.
     /// It never establishes complete account-wide or cross-device coverage.
     let recordsAreComplete: Bool
+    var quotaObservations: [RecordedQuotaObservation] = []
 }
 
 struct DashboardSnapshot: Sendable {

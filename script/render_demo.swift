@@ -5,13 +5,22 @@ import AppKit
 // store, folder enumeration, or user conversations are read by this executable.
 @main @MainActor
 struct DemoImage {
-    static let fixedNow = Date(timeIntervalSince1970: 1893456000)
+    static let fixedNow = fixedDate("2030-10-03T12:00:00Z")
+
+    static func fixedDate(_ value: String) -> Date { ISO8601DateFormatter().date(from: value)! }
 
     static func main() throws {
         _ = NSApplication.shared
         let output = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-        let data = Data(#"{"rateLimits":{"planType":"demo","primary":{"usedPercent":28,"windowDurationMins":10080,"resetsAt":1893715200}},"rateLimitResetCredits":{"availableCount":2,"credits":[{"status":"available","expiresAt":1896048000},{"status":"available","expiresAt":1898467200}]}}"#.utf8)
+        let data = try JSONSerialization.data(withJSONObject: [
+            "rateLimits": ["planType": "demo", "primary": ["usedPercent": 28, "windowDurationMins": 10_080,
+                "resetsAt": fixedNow.addingTimeInterval(3 * 86_400).timeIntervalSince1970]],
+            "rateLimitResetCredits": ["availableCount": 2, "credits": [
+                ["status": "available", "expiresAt": fixedNow.addingTimeInterval(30 * 86_400).timeIntervalSince1970],
+                ["status": "available", "expiresAt": fixedNow.addingTimeInterval(60 * 86_400).timeIntervalSince1970]
+            ]]
+        ])
         let snapshot = try JSONDecoder().decode(QuotaSnapshot.self, from: data)
         for language in [AppLanguage.chinese, .english] {
             for dark in [false, true] {
@@ -36,9 +45,11 @@ struct DemoImage {
             ? ["菜单栏布局示例", "合成数据解析测试", "文档排版与可读性示例"]
             : ["Menu bar layout example", "Synthetic parsing checks", "Documentation readability example"]
         let totals: [AccountingMetricPresentation] = [
-            .init(tokens: 1_280_400, apiUSD: 12.75, costIsPartial: partial),
-            .init(tokens: 4_926_220, apiUSD: 44.60, costUpperBoundUSD: partial ? nil : 49.10, costIsPartial: partial),
-            .init(tokens: 21_780_500, apiUSD: partial ? 174.30 : 148.72, costIsPartial: partial)
+            .init(tokens: 1_280_400, apiUSD: 12.75, costUpperBoundUSD: 13.10),
+            .init(tokens: partial ? 1_280_400 : 4_926_220, apiUSD: partial ? 12.75 : 44.60,
+                  tokensArePartial: true, costIsPartial: true),
+            .init(tokens: partial ? 1_280_400 : 21_780_500, apiUSD: partial ? 12.75 : 148.72,
+                  tokensArePartial: partial, costIsPartial: partial)
         ]
         return AccountingPresentation(
             today: totals[0], sinceReset: totals[1], cycle: totals[2],
@@ -46,23 +57,23 @@ struct DemoImage {
                 AccountingConversationPresentation(id: "fixture-\(index)", title: title,
                     updatedAt: fixedNow.addingTimeInterval(-Double(index * 3600)),
                     metric: .init(tokens: Int64(248_600 + index * 174_820),
-                                  apiUSD: 2.35 + Double(index) * 1.47,
-                                  tokensArePartial: partial && index == 1,
-                                  costIsPartial: partial && index == 1,
-                                  isEstimated: index == 2))
+                                  apiUSD: 2.35 + Double(index) * 1.47))
             },
             coverage: partial ? .partial : .complete, tokenSource: .local, billingDay: 5,
-            cycleStart: Date(timeIntervalSince1970: 1891123200),
-            cycleEnd: Date(timeIntervalSince1970: 1893801600),
+            cycleStart: fixedDate("2030-09-05T00:00:00Z"),
+            cycleEnd: fixedDate("2030-10-05T00:00:00Z"),
             lastReset: fixedNow.addingTimeInterval(-4 * 86_400),
-            lastResetLowerBound: fixedNow.addingTimeInterval(-4 * 86_400 - 60), sourceFolderCount: 1,
-            canCompareSelectedCycle: !partial)
+            lastResetLowerBound: fixedNow.addingTimeInterval(-4 * 86_400 - 60),
+            resetWindowMinutes: 10_080, sourceFolderCount: 1,
+            canCompareSelectedCycle: !partial,
+            trackingStartedAt: fixedDate(partial ? "2030-10-03T00:00:00Z" : "2030-09-05T00:00:00Z"))
     }
 
     static func panel(snapshot: QuotaSnapshot, accounting: AccountingPresentation,
                       language: AppLanguage, dark: Bool) -> some View {
         let status = status(remaining: 72, value: accounting.cycle.costText(),
-                            warning: !accounting.cycle.costIsPartial)
+                            warning: accounting.canCompareSelectedCycle
+                                && (accounting.cycle.costUpperBoundUSD ?? accounting.cycle.apiUSD ?? .infinity) < 200)
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(language == .chinese ? "离线合成示例" : "OFFLINE SYNTHETIC FIXTURE")

@@ -124,9 +124,10 @@ extension AppLanguage {
         case usageDetails, tokens, apiEquivalent, today, sinceReset, billingCycle, settings
         case coverageHelp, cycleNotSet, resetNotObserved, actualReset, recentConversations
         case noConversations, untitledConversation, billingDay, notSet, billingHelp
+        case historicalReset, historicalResetHelp
         case recordSources, chooseFolders, clearSources, sourcesHelp
         case observedResetInterval, resetIntervalHelp, serviceDateHelp
-        case comparisonHelp
+        case comparisonHelp, trackingHelp, recentTrackingHelp
     }
 
     func accountingText(_ key: AccountingText) -> String {
@@ -145,6 +146,10 @@ extension AppLanguage {
         case .cycleNotSet: pair = ("尚未设置订阅起算日", "Subscription start day is not set")
         case .resetNotObserved:
             pair = ("尚未记录实际额度重置时间，暂不能确定统计起点。", "No actual quota reset has been recorded yet.")
+        case .historicalReset: pair = ("历史重置观测", "Historical reset observation")
+        case .historicalResetHelp:
+            pair = ("根据与当前额度窗口一致的历史快照估计；统计观测点之后的用量。记录未提供精确重置瞬间或历史账户标识。",
+                    "Estimated from historical snapshots matching the current limit window. Counts usage after the observation; the exact reset instant and historical account identity are unavailable.")
         case .actualReset: pair = ("重置观测结束", "Reset observation ended")
         case .observedResetInterval: pair = ("观察到的重置区间", "Observed reset interval")
         case .resetIntervalHelp:
@@ -152,8 +157,14 @@ extension AppLanguage {
         case .serviceDateHelp:
             pair = ("服务返回日级 Token，未提供日期时区及模型拆分；日期归属为近似值。", "The service reports daily tokens without a calendar time zone or model breakdown; date attribution is approximate.")
         case .comparisonHelp:
-            pair = ("！表示已选记录在本周期的可比 API 等值低于 $200。仅比较已选范围，未验证账户完整覆盖；使用当前 Standard API 单价。",
-                    "! appears when the comparable API value of this cycle's selected records is below $200. This compares selected sources at current Standard API rates; full-account coverage is unverified.")
+            pair = ("仅在统计覆盖完整周期时，！表示已选记录的 API 等值低于 $200。使用当前 Standard API 单价，未验证账户完整覆盖。",
+                    "! appears below $200 only when tracking covers the complete cycle. It compares selected records at current Standard API rates; full-account coverage is unverified.")
+        case .trackingHelp:
+            pair = ("只累计所选本地根目录及其子目录中，从已保存统计起点开始的用量。首个订阅周期缺少此前日期，覆盖完整周期前不判断是否低于 $200。",
+                    "Counts usage in selected local roots and their descendants from the saved tracking start. Earlier days in the first subscription cycle are outside this range, so the below-$200 comparison stays off until a complete cycle is covered.")
+        case .recentTrackingHelp:
+            pair = ("最近三个对话的数值仅累计统计起点之后的用量，不含更早历史。",
+                    "The last three conversation totals accumulate only usage since tracking started, excluding earlier history.")
         case .recentConversations: pair = ("最近 3 个对话", "Last 3 conversations")
         case .noConversations: pair = ("所选来源暂无可统计的对话记录", "No conversation records in the selected sources")
         case .untitledConversation: pair = ("未命名对话", "Untitled conversation")
@@ -165,7 +176,7 @@ extension AppLanguage {
         case .chooseFolders: pair = ("选择目录…", "Choose folders…")
         case .clearSources: pair = ("清除选择", "Clear selection")
         case .sourcesHelp:
-            pair = ("API 等值来自所选目录中的用量记录，不代表实际账单。缺少的记录不会计为零。", "API estimates use records in the selected folders. They are not billed charges; missing records are never counted as zero.")
+            pair = ("仅累计所选根目录及子目录中，统计起点之后的用量。API 等值不是实际账单；缺少记录不会计为零。", "Counts usage in selected roots and descendants since tracking started. API estimates are not billed charges; missing records are never counted as zero.")
         }
         return self == .chinese ? pair.0 : pair.1
     }
@@ -228,8 +239,30 @@ extension AppLanguage {
         return (self == .chinese ? "订阅周期 · " : "Cycle · ") + dates
     }
 
+    func accountingTrackingStart(_ date: Date) -> String {
+        let date = date.formatted(Date.FormatStyle.dateTime.month(.abbreviated).day().locale(locale))
+        return self == .chinese ? "自 \(date) 统计" : "Tracking since \(date)"
+    }
+
     func accountingDay(_ day: Int) -> String {
         self == .chinese ? "\(day) 日" : "Day \(day)"
+    }
+
+    func accountingResetTitle(minutes: Double?) -> String {
+        guard let minutes, minutes.isFinite, minutes > 0, minutes < 10_000_000 else { return accountingText(.sinceReset) }
+        let count: Int
+        let unit: PeriodUnit
+        if minutes.truncatingRemainder(dividingBy: 1440) == 0 { count = Int(minutes / 1440); unit = .day }
+        else if minutes.truncatingRemainder(dividingBy: 60) == 0 { count = Int(minutes / 60); unit = .hour }
+        else if minutes.truncatingRemainder(dividingBy: 1) == 0 { count = Int(minutes); unit = .minute }
+        else { return accountingText(.sinceReset) }
+        return self == .chinese ? "\(count) \(unit.names.0)额度重置后" : "Since \(count)-\(unit.names.1) reset"
+    }
+
+    func accountingConversation(_ number: Int, updatedAt: Date) -> String {
+        let style = Date.FormatStyle.dateTime.month(.abbreviated).day().hour().minute().locale(locale)
+        let title = self == .chinese ? "对话 \(number)" : "Chat \(number)"
+        return title + " · " + updatedAt.formatted(style)
     }
 
     func accountingFolderCount(_ count: Int) -> String {
