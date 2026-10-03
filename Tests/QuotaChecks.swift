@@ -74,7 +74,7 @@ struct QuotaChecks {
         check(englishError.errorMessage == "Usage request timed out. Check your connection.", "stored error type can render in English without another request")
         check(englishError.statusItem.accessibilityLabel == "Codex remaining quota" && englishError.energyDescription == "On AC power: updates every minute.", "menu-bar accessibility and power help follow the language")
         check(QuotaRingState(remaining: 100).fraction == 1 && QuotaRingState(remaining: 0).fraction == 0, "full and exhausted quota map to full and empty rings")
-        check(QuotaRingState(remaining: 19.9).isLow && !QuotaRingState(remaining: 20).isLow, "warning starts strictly below twenty percent")
+        check(QuotaRingState(remaining: 14.9).isLow && !QuotaRingState(remaining: 15).isLow, "warning starts strictly below fifteen percent")
         check(QuotaRingState(remaining: 0).isLow, "empty quota retains the red warning")
         check(QuotaRingState(remaining: nil).fraction == nil && !QuotaRingState(remaining: nil).isLow, "missing quota is unknown rather than empty or full")
         check(QuotaRingState(remaining: .nan) == QuotaRingState(remaining: .infinity) && QuotaRingState(remaining: .nan).fraction == nil, "nonfinite quota has a stable unknown ring state")

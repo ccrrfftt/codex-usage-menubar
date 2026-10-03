@@ -33,6 +33,11 @@ struct UsageMenuView: View {
                 Text(restriction).font(.caption2).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Divider()
+            UsageAccountingView(presentation: state.accountingPresentation, language: language,
+                                setBillingDay: store.setBillingDay,
+                                chooseFolders: store.chooseAccountingFolders,
+                                clearFolders: store.clearAccountingFolders)
             if let others = state.snapshot?.otherBuckets, !others.isEmpty {
                 OtherQuotasView(buckets: others, language: language)
             }
@@ -51,7 +56,7 @@ struct UsageMenuView: View {
             }.controlSize(.small)
         }
         .padding(12)
-        .frame(width: 276, alignment: .topLeading)
+        .frame(width: 312, alignment: .topLeading)
         .fixedSize(horizontal: false, vertical: true)
         .transaction { transaction in
             transaction.animation = nil

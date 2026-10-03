@@ -9,19 +9,18 @@ final class StatusItemController: NSObject {
     private let item: NSStatusItem
     private let popover = NSPopover()
     private var observation: AnyCancellable?
-    private var displayedRing: QuotaRingState?
+    private let statusLabel = StatusItemLabel()
 
     init(store: UsageStore) {
         self.store = store
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         if let button = item.button {
-            // Keep the system menu-bar face, one point smaller than its default size.
-            let defaultSize = NSFont.menuBarFont(ofSize: 0).pointSize
-            button.font = NSFont.menuBarFont(ofSize: max(10, defaultSize - 1))
-            button.imagePosition = .imageLeading
-            button.imageScaling = .scaleProportionallyDown
-            button.alignment = .center
+            button.title = ""
+            button.image = nil
+            statusLabel.frame = button.bounds
+            statusLabel.autoresizingMask = [.width, .height]
+            button.addSubview(statusLabel)
             button.target = self
             button.action = #selector(togglePopover)
         }
@@ -39,11 +38,9 @@ final class StatusItemController: NSObject {
 
     private func updateButton(_ state: StatusItemState) {
         guard let button = item.button else { return }
-        if displayedRing != state.ring {
-            button.image = StatusItemRing.image(for: state.ring)
-            displayedRing = state.ring
-        }
-        if button.title != state.title { button.title = state.title }
+        let width = StatusItemLabel.width(for: state)
+        if item.length != width { item.length = width }
+        statusLabel.state = state
         if button.toolTip != state.tooltip { button.toolTip = state.tooltip }
         if button.accessibilityLabel() != state.accessibilityLabel {
             button.setAccessibilityLabel(state.accessibilityLabel)

@@ -9,6 +9,7 @@ struct UsageState {
     var now = Date.now
     var energy = EnergyState()
     var language = AppLanguage.chinese
+    var accountingPresentation = AccountingPresentation.empty
 
     var errorMessage: String? { lastError?.message(in: language) }
 
@@ -44,19 +45,28 @@ struct UsageState {
     var statusItem: StatusItemState {
         let percent = quotaPercent(remaining, language: language)
         let label = language.text(.statusItemLabel)
+        let metric = accountingPresentation.cycle
+        let upper = metric.costUpperBoundUSD ?? metric.apiUSD
+        let belowSubscription = accountingPresentation.canCompareSelectedCycle && !stale && !metric.isEstimated && !metric.costIsPartial && upper.map { $0.isFinite && $0 >= 0 && $0 < 200 } == true
+        let valueText = metric.costText(compact: true)
+        let valueTitle = valueText == "—" ? "$—" : valueText
+        let valueHelp = language.accountingText(.billingCycle) + " · " + (language == .chinese ? "所选记录 Standard API 等值 " : "Selected records, Standard API equivalent ") + valueText
+        let warningHelp = belowSubscription ? (language == .chinese ? "；所选范围本周期 Standard API 等值低于 $200；全账户未核验" : "; selected sources this cycle are below $200 Standard API equivalent; account-wide coverage is unverified") : ""
         let restriction = restrictionMessage.map { "\n" + $0 } ?? ""
         return StatusItemState(
             title: percent + (remaining != nil && stale ? " ·" : ""),
-            ring: QuotaRingState(remaining: remaining),
-            tooltip: "\(label) \(percent) · \(status)\(restriction)\n\(energyDescription)",
+            ring: QuotaRingState(remaining: remaining, showsValueWarning: belowSubscription),
+            valueTitle: valueTitle,
+            tooltip: "\(label) \(percent) · \(status)\(restriction)\n\(valueHelp)\(warningHelp)\n\(energyDescription)",
             accessibilityLabel: label,
-            accessibilityValue: percent + restriction)
+            accessibilityValue: percent + restriction + "; " + valueHelp + warningHelp)
     }
 }
 
 struct StatusItemState: Equatable {
     let title: String
     let ring: QuotaRingState
+    var valueTitle: String = "$—"
     let tooltip: String
     let accessibilityLabel: String
     let accessibilityValue: String

@@ -20,7 +20,7 @@ struct QuotaSummaryView: View {
             }
             ProgressView(value: remaining ?? 0, total: 100)
                 .controlSize(.small)
-                .tint((remaining ?? 100) <= 20 ? .orange : .green)
+                .tint((remaining ?? 100) < 15 ? .red : .green)
                 .accessibilityLabel("\(language.text(.remainingQuota)) \(percent)")
             HStack(alignment: .top) {
                 Text(language.text(.nextReset)).foregroundStyle(.secondary)

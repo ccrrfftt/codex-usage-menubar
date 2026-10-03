@@ -118,3 +118,121 @@ enum AppLanguage: String, Sendable {
         return self == .chinese ? "更新于 \(time)" : "Updated \(time)"
     }
 }
+
+extension AppLanguage {
+    enum AccountingText {
+        case usageDetails, tokens, apiEquivalent, today, sinceReset, billingCycle, settings
+        case coverageHelp, cycleNotSet, resetNotObserved, actualReset, recentConversations
+        case noConversations, untitledConversation, billingDay, notSet, billingHelp
+        case recordSources, chooseFolders, clearSources, sourcesHelp
+        case observedResetInterval, resetIntervalHelp, serviceDateHelp
+        case comparisonHelp
+    }
+
+    func accountingText(_ key: AccountingText) -> String {
+        let pair: (String, String)
+        switch key {
+        case .usageDetails: pair = ("用量明细", "Usage details")
+        case .tokens: pair = ("Token", "tokens")
+        case .apiEquivalent: pair = ("API 等值 · USD", "API equiv. · USD")
+        case .today: pair = ("今日", "Today")
+        case .sinceReset: pair = ("上次重置以来", "Since last reset")
+        case .billingCycle: pair = ("本订阅周期", "This cycle")
+        case .settings: pair = ("统计设置", "Usage settings")
+        case .coverageHelp:
+            pair = ("统计仅覆盖可读取的用量记录。≥ 为已知下界；≈ 为历史遥测估算；— 为暂不可用。Token 和金额的覆盖范围可能不同。",
+                    "Totals cover readable records. ≥ marks a known lower bound, ≈ legacy telemetry estimates, and — unavailable values. Token and price coverage can differ.")
+        case .cycleNotSet: pair = ("尚未设置订阅起算日", "Subscription start day is not set")
+        case .resetNotObserved:
+            pair = ("尚未记录实际额度重置时间，暂不能确定统计起点。", "No actual quota reset has been recorded yet.")
+        case .actualReset: pair = ("重置观测结束", "Reset observation ended")
+        case .observedResetInterval: pair = ("观察到的重置区间", "Observed reset interval")
+        case .resetIntervalHelp:
+            pair = ("重置发生于该区间内，具体时刻未知；仅统计区间结束后的记录。", "The reset occurred within this interval; its exact time is unknown. Only records after its end are counted.")
+        case .serviceDateHelp:
+            pair = ("服务返回日级 Token，未提供日期时区及模型拆分；日期归属为近似值。", "The service reports daily tokens without a calendar time zone or model breakdown; date attribution is approximate.")
+        case .comparisonHelp:
+            pair = ("！表示已选记录在本周期的可比 API 等值低于 $200。仅比较已选范围，未验证账户完整覆盖；使用当前 Standard API 单价。",
+                    "! appears when the comparable API value of this cycle's selected records is below $200. This compares selected sources at current Standard API rates; full-account coverage is unverified.")
+        case .recentConversations: pair = ("最近 3 个对话", "Last 3 conversations")
+        case .noConversations: pair = ("所选来源暂无可统计的对话记录", "No conversation records in the selected sources")
+        case .untitledConversation: pair = ("未命名对话", "Untitled conversation")
+        case .billingDay: pair = ("每月起算日", "Monthly start day")
+        case .notSet: pair = ("未设置", "Not set")
+        case .billingHelp:
+            pair = ("以本地时区的当日 00:00 起算，并非精确扣费时刻。短月份使用当月最后一天。", "Cycles start at local midnight, not the exact billing time. Short months use their last day.")
+        case .recordSources: pair = ("用量记录来源", "Usage record sources")
+        case .chooseFolders: pair = ("选择目录…", "Choose folders…")
+        case .clearSources: pair = ("清除选择", "Clear selection")
+        case .sourcesHelp:
+            pair = ("API 等值来自所选目录中的用量记录，不代表实际账单。缺少的记录不会计为零。", "API estimates use records in the selected folders. They are not billed charges; missing records are never counted as zero.")
+        }
+        return self == .chinese ? pair.0 : pair.1
+    }
+
+    func accountingCoverage(_ coverage: AccountingCoverage) -> String {
+        let pair: (String, String)
+        switch coverage {
+        case .loading: pair = ("读取中…", "Reading…")
+        case .unavailable: pair = ("记录不可用", "Unavailable")
+        case .partial: pair = ("部分记录", "Partial coverage")
+        case .complete: pair = ("范围内完整", "Complete in scope")
+        }
+        return self == .chinese ? pair.0 : pair.1
+    }
+
+    func accountingScope(source: AccountingTokenSource, folderCount: Int) -> String {
+        let pair: (String, String)
+        switch source {
+        case .account:
+            pair = ("服务日期 Token · 无模型拆分", "Service-date tokens · no model breakdown")
+        case .local: pair = ("所选本地记录 · API 等值", "Selected local usage · API equivalent")
+        case .mixed: pair = ("账户及本地 Token · 所选记录等值", "Account and local tokens · selected records priced")
+        case .unavailable: pair = ("尚无可统计记录", "No usage records available")
+        }
+        return self == .chinese ? pair.0 : pair.1
+    }
+
+    func accountingCostHelp(_ metric: AccountingMetricPresentation) -> String {
+        guard metric.apiUSD != nil else {
+            return self == .chinese ? "缺少可计价记录，API 等值暂不可用。" : "API equivalent is unavailable without priceable records."
+        }
+        let detail: String
+        if metric.isEstimated {
+            detail = self == .chinese
+                ? "历史遥测估算，可能包含重放或不完整记录，不能视为精确总量或保证下界。"
+                : "Legacy telemetry may contain replayed or missing records; this is not an exact total or a guaranteed lower bound."
+        } else if metric.costIsPartial {
+            detail = self == .chinese ? "仅含可计价记录，尚缺部分用量。" : "Only priceable records are included; some usage is missing."
+        } else if metric.costUpperBoundUSD != nil {
+            detail = self == .chinese ? "根据适用价格区间估算。" : "Estimated from the applicable price range."
+        } else {
+            detail = ""
+        }
+        let ending = self == .chinese
+            ? "按当前 Standard API 单价估算，不代表实际账单。"
+            : "Estimated at current Standard API rates, not a billed charge."
+        return metric.costText() + " USD · " + detail + " " + ending
+    }
+
+    func accountingMetricDescription(_ metric: AccountingMetricPresentation) -> String {
+        let values = metric.tokenText(in: self, compact: false) + " " + accountingText(.tokens)
+            + ", " + accountingText(.apiEquivalent) + " " + metric.costText()
+        guard metric.tokensArePartial || metric.costIsPartial else { return values }
+        return values + ", " + accountingCoverage(.partial)
+    }
+
+    func accountingDateRange(start: Date, end: Date) -> String {
+        let style = Date.FormatStyle.dateTime.month(.abbreviated).day().locale(locale)
+        let dates = start.formatted(style) + " → " + end.formatted(style)
+        return (self == .chinese ? "订阅周期 · " : "Cycle · ") + dates
+    }
+
+    func accountingDay(_ day: Int) -> String {
+        self == .chinese ? "\(day) 日" : "Day \(day)"
+    }
+
+    func accountingFolderCount(_ count: Int) -> String {
+        self == .chinese ? "已选 \(count) 个目录" : "\(count) \(count == 1 ? "folder" : "folders") selected"
+    }
+}

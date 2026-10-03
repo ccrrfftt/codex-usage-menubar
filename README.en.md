@@ -2,7 +2,9 @@
 
 [简体中文](README.md) · English
 
-Check your Codex remaining quota, reset times, and reset-card expiry dates from the macOS menu bar.
+Check Codex quota, reset times, and token API equivalents from the macOS menu bar.
+
+This development branch is **1.7.0**, not yet released. The download link still points to the published version. See [accounting scope and limitations](docs/ACCOUNTING.md).
 
 **[Download the latest version](https://github.com/ccrrfftt/codex-usage-menubar/releases/latest)**
 
@@ -12,7 +14,9 @@ Check your Codex remaining quota, reset times, and reset-card expiry dates from 
 
 Screenshot uses fictional demo data only.
 
-- **Remaining-quota ring:** the arc follows your remaining allowance and turns red below 20%. The percentage stays beside it; click for details.
+- **Remaining-quota ring:** the arc follows your remaining allowance and turns red below 15%. The percentage stays beside it; click for details.
+- **Tokens and API equivalents:** today, after the observed reset interval, the subscription cycle, and the last three conversations in selected sources. Configure your renewal day.
+- **Explicit scope:** only selected project usage records are read. `≈` means estimated, `≥` a known lower bound, and `—` unavailable. Values use current Standard API prices, not billed charges.
 - **Reset cards:** view the available count and each card's expiry date.
 - **Chinese and English:** click **EN / 中文** at the top right of the panel. Your choice is remembered.
 - **Automatic updates:** every minute on AC power, every 5 minutes on battery; paused while asleep or offline.
