@@ -1,6 +1,6 @@
 # Token accounting upgrade
 
-Status: implementation in progress; desktop acceptance and release are pending.
+Status: implemented; final native verification and release checklist are recorded in the design review.
 
 ## Requested behavior
 
@@ -50,8 +50,8 @@ evidence exists, that row remains unavailable rather than inventing a boundary.
 
 1. Synthetic checks: date boundaries, period rollover, unknown and partial data, duplicate responses, forks, per-model prices, missing cache writes, numeric overflow and cancelled reads.
 2. Native rendering: normal/low/unknown quota, warning/unknown value, bilingual and appearance variants, compact two-line menu bar.
-3. Interactive desktop checks: disclosures, language, billing-day changes, source picker, refresh, stale recovery, quit and relaunch. Static tests and offscreen images do not substitute for this gate.
+3. Native runtime checks: disclosures, language, billing-day changes, source picker, refresh, stale recovery, quit and relaunch. The user explicitly waived the dedicated Computer-tool requirement on 2026-10-03. Native runtime evidence and any limits must still be reported accurately.
 4. Design review: clarity, visual hierarchy, interaction, accessibility, restrained feedback, consistency, usefulness and efficient implementation. Award criteria are a review framework, not certification.
 5. Full release: documentation, version/build, changelog, tests, privacy review, commit/tag, downloadable app and checksum, actual GitHub Release, remote re-download verification.
 
-Do not publish a stable release while the required interactive checks or accounting correctness remain unresolved.
+Do not present static fixtures as live testing, and do not publish while accounting correctness remains unresolved.

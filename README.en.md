@@ -4,7 +4,7 @@
 
 Check Codex quota, reset times, and token API equivalents from the macOS menu bar.
 
-This development branch is **1.7.0**, not yet released. The download link still points to the published version. See [accounting scope and limitations](docs/ACCOUNTING.md).
+**1.7.0** adds token tracking from the activation day and model-specific API equivalents. See [accounting scope and limitations](docs/ACCOUNTING.md).
 
 **[Download the latest version](https://github.com/ccrrfftt/codex-usage-menubar/releases/latest)**
 
@@ -25,7 +25,7 @@ Screenshot uses fictional demo data only.
 
 Requires an **Apple Silicon Mac with macOS 14 or later**, and an installed Codex / ChatGPT desktop app signed in to your account.
 
-Version 1.6.2 is verified with Codex 26.928.20755 / CLI 0.159.0 and supports both system and user Applications folders. A clear warning appears when the server blocks included usage.
+Version 1.7.0 passed a live quota-read check with Codex 26.930.31730 / CLI 0.160.0 and supports both system and user Applications folders. A clear warning appears when the server blocks included usage.
 
 1. Download and unzip the latest `Codex-Usage-VERSION-macOS-arm64.zip`.
 2. Drag `Codex Usage.app` into **Applications**, then open it.
@@ -40,4 +40,4 @@ A native app with no browser, Python, or API key requirement. It only reads usag
 
 [Development notes (Chinese)](DEVELOPMENT.md) · [Changelog (Chinese)](CHANGELOG.md) · [Icon attribution](Assets/README.md)
 
-A personal project, not an official OpenAI app.
+A personal project, not an official OpenAI app. No open-source license is currently included.

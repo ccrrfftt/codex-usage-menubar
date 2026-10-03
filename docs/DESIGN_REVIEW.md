@@ -160,3 +160,28 @@ Final prospective checkpoint: all 364 synthetic checks pass, including 53 parser
 compiles and its local signature verifies. Its controls have not been exercised
 with the required Computer tool. The README image is an inspected fictional
 fixture with non-pixel metadata removed; it is not a live account screenshot.
+
+
+## Release verification: 1.7.0
+
+The user waived the dedicated Computer-tool requirement on 2026-10-03. A bounded
+native self-test then exercised the actual status button, popover, language
+switch, blank portions of both disclosure rows, and refresh action. It completed
+with 36 passing checks, zero failures and 15 explicit inspection limitations.
+Both expansions preserved the top edge with zero displacement. Own-view captures
+were inspected after transparent pixels were composited onto white; all rows and
+the footer remained legible and unclipped. This is native view/event evidence,
+not a full-desktop screenshot or a VoiceOver certification.
+
+The 364 synthetic checks cover the production accounting, date, pricing,
+settings, cancellation and energy policies. Production source did not change
+after that run. A real read-only check passed with CLI 0.160.0 on desktop
+26.930.31730 (build 12947), including the presence of reset-tracking identity and
+window fields. The required local SQLite column types also match; that schema
+check did not query conversation rows.
+
+The remaining native inspection limits are the settings/date/folder controls,
+physical input and VoiceOver, as detailed in [UI testing](UI_TESTING.md). Settings
+persistence and source replacement are covered by store tests. No private account
+values, conversation content or personal project paths appear in public fixtures.
+The distributable is ad-hoc signed and is not Apple-notarized.

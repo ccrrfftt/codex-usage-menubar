@@ -4,7 +4,7 @@
 
 在 Mac 顶部菜单栏查看 Codex 额度、重置时间和 Token 的 API 等值。
 
-当前开发分支为 **1.7.0**，尚未发布；下载入口仍为已发布版本。新功能的数据范围与限制见[统计说明](docs/ACCOUNTING.md)。
+**1.7.0** 新增从启用当天开始的 Token 统计和分模型 API 等值。范围与限制见[统计说明](docs/ACCOUNTING.md)。
 
 **[下载最新版](https://github.com/ccrrfftt/codex-usage-menubar/releases/latest)**
 
@@ -25,7 +25,7 @@
 
 需要 **Apple Silicon Mac、macOS 14+**，并已安装、登录 Codex / ChatGPT 桌面应用。
 
-1.6.2 已验证兼容 Codex 26.928.20755 / CLI 0.159.0，支持系统和个人「应用程序」目录。服务端限制常规用量时，会显示明确提示。
+1.7.0 已通过 Codex 26.930.31730 / CLI 0.160.0 的真实额度读取检查，支持系统和个人「应用程序」目录。服务端限制常规用量时，会显示明确提示。
 
 1. 下载并解压最新版的 `Codex-Usage-版本号-macOS-arm64.zip`。
 2. 把 `Codex Usage.app` 拖进「应用程序」，双击打开。
@@ -40,4 +40,4 @@
 
 [开发说明](DEVELOPMENT.md) · [更新记录](CHANGELOG.md) · [图标来源](Assets/README.md)
 
-个人项目，非 OpenAI 官方应用。
+个人项目，非 OpenAI 官方应用。仓库暂未附开源许可证。

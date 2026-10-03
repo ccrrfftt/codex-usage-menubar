@@ -1,4 +1,4 @@
-# Tracking scope and start date
+# Usage accounting / 用量统计
 
 The user-selected local project roots and their descendants define the accounting
 scope. Tracking begins at local midnight on first activation. The start is saved
@@ -30,11 +30,9 @@ A successful, empty scoped index is a known zero since tracking began. A missing
 or incompatible index, unavailable source, interrupted import or row cap is not.
 All accounting follows the existing power-aware polling schedule.
 
----
+## Overview
 
-# Usage accounting / 用量统计
-
-The 1.7.0 development branch adds token statistics and **current Standard API-equivalent USD**. Desktop acceptance and the release are still pending. This comparison is not a bill, credit balance, refund or demonstrated saving.
+Version 1.7.0 adds token statistics and **current Standard API-equivalent USD**. This comparison is not a bill, credit balance, refund or demonstrated saving.
 
 1. 在统计设置中选择每月续费日。周期以本机时区的当天 00:00 划分；日期不足的月份取最后一天。这里只知道续费日，不推断支付平台精确扣费时间。
 2. 选择允许纳入的项目目录。根目录会覆盖其下的工作目录。应用通过只读会话索引查找相应记录，**不会遍历项目源码目录**；相似名称的相邻目录不在范围内。

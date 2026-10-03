@@ -2,8 +2,9 @@
 
 `script/run_ui_fixture.sh` builds a separate **Codex Usage QA.app** from the
 production models, services, store, and views, excluding the production app
-entrypoint. Its bundle ID and UserDefaults suite are
-`local.codexusage.acceptance`; its process is `CodexUsageQA`. It is an accessory
+entrypoint. Its bundle ID is `local.codexusage.acceptance.app`, its isolated UserDefaults
+suite is `local.codexusage.acceptance`, and its process is `CodexUsageQA`. The
+bundle ID intentionally differs from the explicit preference suite. It is an accessory
 app without a Dock icon and has a small, explicitly labeled QA control window.
 
 ## Build and launch boundaries
@@ -23,8 +24,8 @@ For an interactive test run:
 ./script/run_ui_fixture.sh --launch
 ```
 
-Use **Quit QA** or the real panel's quit button when finished. The script never
-kills a process. Quit the QA app before rebuilding if a new executable must be
+Use **Quit QA** or the real panel's quit button when finished. The launch/build-only paths do not stop a process. The optional self-test
+requests graceful termination only of the old or current QA bundle before rebuilding. Quit the QA app before rebuilding if a new executable must be
 loaded. The production Codex Usage app and its preferences are separate.
 
 ## Synthetic data boundary
@@ -99,10 +100,65 @@ mark is absent. Dark-appearance fixtures start tracking at the cycle boundary
 and retain the complete-cycle comparison example. All dates use fictional 2030
 fixtures. These are layout images, not interactive acceptance screenshots.
 
-## Computer-tool gate — unperformed
+## Optional bounded native self-test
 
-Building or launching this harness is not UI acceptance. Capture and inspect
-the actual running app using the Computer tool before marking any row passed.
+```bash
+./script/run_ui_fixture.sh --self-test
+```
+
+This mode terminates only an existing QA instance, builds the fixture, then runs
+at most 40 seconds of checks inside its own native process. It opens the actual
+NSStatusBarButton/NSPopover and attempts native accessibility actions. Where
+SwiftUI exposes only an accessibility root group, a few panel actions use mouse
+down/up events posted only to the QA application's own event queue at positions
+from inspected fixture captures. Scenario-state fallbacks use the same public QA
+controller and production store actions; they are distinguished from UI actions.
+
+Results are written beneath the QA build's `ui-fixture/self-test-<timestamp>/`
+folder as `result.json`, `result.txt`, startup/progress logs and native PNGs. Each
+check reports pass, failure or an inspection limitation. Captures cache only the
+QA app's owned views and composite transparent pixels onto the native appearance
+background for readability. They do not include the desktop or another app and
+are not screenshots of the window's translucent desktop compositing.
+
+This self-test does not use System Events, AXUIElement, external Computer tools,
+TCC changes or private account data. It exits its QA instance when finished. It
+does not establish a physical pointer/keyboard or VoiceOver audit.
+
+### Recorded native run — 2026-10-03
+
+The bounded run completed with **36 passed checks, zero failed checks and 15
+inspection limitations**. The actual status button opened the production
+popover. Native events changed Chinese to English and persisted the QA language.
+Clicks in the blank trailing portion of the disclosure rows grew the popover
+from 491 to 598 to 667 points; both expansions kept the top edge unchanged
+(0-point displacement). The real refresh button completed through the existing
+cooldown and scheduler. Boundary pricing, red strictly below 15%, incomplete
+values, stale-data retention, offline recovery and power cadence passed through
+the production store. A separate bundle-specific check found zero QA processes
+after quit.
+
+SwiftUI exposed only its root accessibility group to the in-process query. The
+15 limitations cover child-control discovery: fixture-state buttons used public
+controller fallbacks, and settings/date/folder controls were not automatically
+exercised. Footer accessibility bounds were unavailable; the footer is visibly
+unclipped in the captured expanded view. Physical input and VoiceOver remain
+outside this run.
+
+The native view-cache PNGs initially retained transparent backgrounds. Original
+PNGs were preserved; supplementary `-on-white.png` copies were composited from
+those same pixels with Core Graphics onto opaque white for inspection. The
+Chinese collapsed, English expanded and final Chinese views were inspected;
+their quota, three metrics, dates, conversation rows, other limits and footer
+are legible without clipping. These captures validate owned-view paint and
+layout, not the desktop compositor's translucent background. The capture helper
+now uses source-over Core Graphics drawing to preserve its appearance background.
+
+## Additional interactive checks
+
+Building or launching this harness alone is not UI acceptance. Use the concrete
+native self-test log and inspect its captures. The checklist below also supports
+manual or optional Computer-tool testing when deeper coverage is needed.
 
 1. Open the real panel. Inspect the menu label, main quota, all three period rows,
    coverage label, tracking-start date, reset-card count and both expiry rows.
