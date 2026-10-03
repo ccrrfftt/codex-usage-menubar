@@ -24,10 +24,10 @@ private enum FixtureScenario: String, CaseIterable, Identifiable, Sendable {
     }
     var expected: String {
         switch self {
-        case .below: "$150.00; center !; ordinary quota color."
-        case .equal: "$200.00; no center !."
-        case .above: "$250.00; no center !."
-        case .lowQuota: "14.9% in red; $150.00 with center !."
+        case .below: "$150; center !; ordinary quota color."
+        case .equal: "$200; no center !."
+        case .above: "$250; no center !."
+        case .lowQuota: "14% (raw 14.9%) in red; $150 with center !."
         case .boundaryQuota: "Exactly 15% uses the ordinary color; center ! remains."
         case .partial: "Known totals use ≥; comparison unavailable."
         case .legacy: "Historical estimates use ≈ and a price range; no center !."

@@ -114,16 +114,22 @@ struct UsageAccountingView: View {
 
     private var resetHelp: String {
         guard let reset = presentation.lastReset else { return language.accountingText(.resetNotObserved) }
+        let window = QuotaWindow(usedPercent: nil, windowDurationMins: presentation.resetWindowMinutes, resetsAt: nil)
+        let period = presentation.resetWindowMinutes == nil ? "" : window.period(in: language) + " · "
+        if presentation.lastResetFromSchedule {
+            return period + language.accountingText(.scheduledReset) + " · " + language.dateTime(reset) + "\n"
+                + language.accountingText(.scheduledResetHelp)
+        }
         if presentation.lastResetFromHistory {
-            return language.accountingText(.historicalReset) + " · " + language.dateTime(reset) + "\n"
+            return period + language.accountingText(.historicalReset) + " · " + language.dateTime(reset) + "\n"
                 + language.accountingText(.historicalResetHelp)
         }
         if let lower = presentation.lastResetLowerBound {
-            return language.accountingText(.observedResetInterval) + " · "
+            return period + language.accountingText(.observedResetInterval) + " · "
                 + language.dateTime(lower) + " → " + language.dateTime(reset) + "\n"
                 + language.accountingText(.resetIntervalHelp)
         }
-        return language.accountingText(.actualReset) + " · " + language.dateTime(reset)
+        return period + language.accountingText(.actualReset) + " · " + language.dateTime(reset)
     }
 
     private func tokenHelp(_ metric: AccountingMetricPresentation, title: AppLanguage.AccountingText) -> String {

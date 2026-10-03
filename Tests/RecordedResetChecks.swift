@@ -47,6 +47,16 @@ struct RecordedResetChecks {
         let missing = try JSONDecoder().decode(RecordedQuotaSnapshotPayload.self, from: Data(#"{"primary":{"used_percent":20,"window_minutes":300,"resets_at":2500}}"#.utf8))
         check(missing.observation(at: date(2100)) == nil, "unidentified legacy quota remains unattributed")
         check(payload.observation(at: date(4000)) == nil, "already-expired replayed snapshots cannot fabricate a current reset")
+        var scheduled = AccountingResetTracker()
+        scheduled.observe(accountID: "synthetic", window: .init(usedPercent: 20, windowDurationMins: 300, resetsAt: 100_000), at: date(90_000))
+        check(RecordedResetInference.scheduledStart(current: scheduled, now: date(90_000)) == date(82_000),
+              "fallback estimates only the start of a currently active schedule window")
+        check(RecordedResetInference.scheduledStart(current: scheduled, now: date(100_001)) == nil,
+              "an expired schedule cannot provide an estimated current reset")
+        check(RecordedResetInference.scheduledStart(current: scheduled, now: date(80_000)) == nil,
+              "a calculated future window start is rejected")
+        check(RecordedResetInference.scheduledStart(current: .init(), now: date(90_000)) == nil,
+              "missing quota context remains unavailable rather than copying today's total")
         print("\(count) recorded reset checks passed.")
     }
 }

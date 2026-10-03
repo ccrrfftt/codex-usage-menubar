@@ -80,6 +80,7 @@ struct AccountingPresentation: Equatable, Sendable {
     /// This compares only the selected records; it never asserts whole-account coverage.
     var canCompareSelectedCycle = false
     var trackingStartedAt: Date? = nil
+    var lastResetFromSchedule = false
 
     static let empty = AccountingPresentation()
 }

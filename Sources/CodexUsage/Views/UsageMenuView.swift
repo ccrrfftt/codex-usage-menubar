@@ -22,7 +22,7 @@ struct UsageMenuView: View {
                 Text(main?.planType?.uppercased() ?? language.text(.connecting))
                     .font(.caption2).foregroundStyle(.secondary)
             }
-            QuotaSummaryView(main: main, now: state.now, language: language)
+            QuotaSummaryView(main: main, now: state.now, language: language, cycleValue: state.accountingPresentation.cycle)
             ResetCardsView(count: state.snapshot?.resetCardCount, cards: state.snapshot?.resetCards,
                            now: state.now, language: language)
             if let error = state.errorMessage {

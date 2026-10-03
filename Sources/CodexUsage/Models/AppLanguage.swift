@@ -124,7 +124,7 @@ extension AppLanguage {
         case usageDetails, tokens, apiEquivalent, today, sinceReset, billingCycle, settings
         case coverageHelp, cycleNotSet, resetNotObserved, actualReset, recentConversations
         case noConversations, untitledConversation, billingDay, notSet, billingHelp
-        case historicalReset, historicalResetHelp
+        case historicalReset, historicalResetHelp, scheduledReset, scheduledResetHelp
         case recordSources, chooseFolders, clearSources, sourcesHelp
         case observedResetInterval, resetIntervalHelp, serviceDateHelp
         case comparisonHelp, trackingHelp, recentTrackingHelp
@@ -137,15 +137,19 @@ extension AppLanguage {
         case .tokens: pair = ("Token", "tokens")
         case .apiEquivalent: pair = ("API 等值 · USD", "API equiv. · USD")
         case .today: pair = ("今日", "Today")
-        case .sinceReset: pair = ("上次重置以来", "Since last reset")
+        case .sinceReset: pair = ("上次重置", "Since last reset")
         case .billingCycle: pair = ("本订阅周期", "This cycle")
         case .settings: pair = ("统计设置", "Usage settings")
         case .coverageHelp:
-            pair = ("统计仅覆盖可读取的用量记录。≥ 为已知下界；≈ 为历史遥测估算；— 为暂不可用。Token 和金额的覆盖范围可能不同。",
-                    "Totals cover readable records. ≥ marks a known lower bound, ≈ legacy telemetry estimates, and — unavailable values. Token and price coverage can differ.")
+            pair = ("统计仅覆盖可读取的用量记录。≥ 为已知下界；≈ 为用量或统计起点估算；— 为暂不可用。Token 和金额的覆盖范围可能不同。",
+                    "Totals cover readable records. ≥ marks a known lower bound, ≈ estimated usage or period boundaries, and — unavailable values. Token and price coverage can differ.")
         case .cycleNotSet: pair = ("尚未设置订阅起算日", "Subscription start day is not set")
         case .resetNotObserved:
             pair = ("尚未记录实际额度重置时间，暂不能确定统计起点。", "No actual quota reset has been recorded yet.")
+        case .scheduledReset: pair = ("按额度窗口估算的起点", "Estimated window start")
+        case .scheduledResetHelp:
+            pair = ("按下次重置时间减去额度周期长度估算，实际重置时刻尚未确认。只累计估算起点之后且在追踪范围内的记录，数值以 ≈ 标记；若今天中途重置，今天较早的用量不会计入。",
+                    "Estimated from the next reset minus the quota-window duration; the actual reset time is unconfirmed. Only tracked records after this estimate are counted, marked ≈. A reset during today excludes earlier usage today.")
         case .historicalReset: pair = ("历史重置观测", "Historical reset observation")
         case .historicalResetHelp:
             pair = ("根据与当前额度窗口一致的历史快照估计；统计观测点之后的用量。记录未提供精确重置瞬间或历史账户标识。",
@@ -163,8 +167,8 @@ extension AppLanguage {
             pair = ("只累计所选本地根目录及其子目录中，从已保存统计起点开始的用量。首个订阅周期缺少此前日期，覆盖完整周期前不判断是否低于 $200。",
                     "Counts usage in selected local roots and their descendants from the saved tracking start. Earlier days in the first subscription cycle are outside this range, so the below-$200 comparison stays off until a complete cycle is covered.")
         case .recentTrackingHelp:
-            pair = ("最近三个对话的数值仅累计统计起点之后的用量，不含更早历史。",
-                    "The last three conversation totals accumulate only usage since tracking started, excluding earlier history.")
+            pair = ("最近三个主对话各自从统计起点累计的用量；上方合计还包含范围内的子代理记录。",
+                    "Each of the last three main conversations accumulates its own usage since tracking started. Overall totals also include scoped subagents.")
         case .recentConversations: pair = ("最近 3 个对话", "Last 3 conversations")
         case .noConversations: pair = ("所选来源暂无可统计的对话记录", "No conversation records in the selected sources")
         case .untitledConversation: pair = ("未命名对话", "Untitled conversation")
@@ -211,8 +215,8 @@ extension AppLanguage {
         let detail: String
         if metric.isEstimated {
             detail = self == .chinese
-                ? "历史遥测估算，可能包含重放或不完整记录，不能视为精确总量或保证下界。"
-                : "Legacy telemetry may contain replayed or missing records; this is not an exact total or a guaranteed lower bound."
+                ? "用量来源或统计起点包含估算，不能视为精确总量或保证下界。"
+                : "The usage source or period boundary is estimated; this is not an exact total or a guaranteed lower bound."
         } else if metric.costIsPartial {
             detail = self == .chinese ? "仅含可计价记录，尚缺部分用量。" : "Only priceable records are included; some usage is missing."
         } else if metric.costUpperBoundUSD != nil {
@@ -248,20 +252,11 @@ extension AppLanguage {
         self == .chinese ? "\(day) 日" : "Day \(day)"
     }
 
-    func accountingResetTitle(minutes: Double?) -> String {
-        guard let minutes, minutes.isFinite, minutes > 0, minutes < 10_000_000 else { return accountingText(.sinceReset) }
-        let count: Int
-        let unit: PeriodUnit
-        if minutes.truncatingRemainder(dividingBy: 1440) == 0 { count = Int(minutes / 1440); unit = .day }
-        else if minutes.truncatingRemainder(dividingBy: 60) == 0 { count = Int(minutes / 60); unit = .hour }
-        else if minutes.truncatingRemainder(dividingBy: 1) == 0 { count = Int(minutes); unit = .minute }
-        else { return accountingText(.sinceReset) }
-        return self == .chinese ? "\(count) \(unit.names.0)额度重置后" : "Since \(count)-\(unit.names.1) reset"
-    }
+    func accountingResetTitle(minutes: Double?) -> String { accountingText(.sinceReset) }
 
     func accountingConversation(_ number: Int, updatedAt: Date) -> String {
         let style = Date.FormatStyle.dateTime.month(.abbreviated).day().hour().minute().locale(locale)
-        let title = self == .chinese ? "对话 \(number)" : "Chat \(number)"
+        let title = self == .chinese ? "未命名对话 \(number)" : "Unnamed chat \(number)"
         return title + " · " + updatedAt.formatted(style)
     }
 

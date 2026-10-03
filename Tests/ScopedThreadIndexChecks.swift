@@ -30,7 +30,7 @@ private final class IndexCancellationCounter: @unchecked Sendable {
           id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, cwd TEXT NOT NULL,
           created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, model_provider TEXT NOT NULL,
           source TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0,
-          title TEXT NOT NULL DEFAULT 'synthetic confidential title', preview TEXT DEFAULT 'synthetic ignored preview'
+          title TEXT NOT NULL DEFAULT 'Synthetic conversation title', preview TEXT DEFAULT 'synthetic ignored preview'
         );
         CREATE TABLE thread_spawn_edges(parent_thread_id TEXT NOT NULL, child_thread_id TEXT PRIMARY KEY, status TEXT NOT NULL);
         CREATE INDEX fixture_cwd ON threads(cwd);
@@ -77,7 +77,7 @@ private final class IndexCancellationCounter: @unchecked Sendable {
         check(Set(scoped.threads.map(\.id)) == ["root", "child", "archived", "agent"], "root and descendants match exact path components")
         check(scoped.threads.first?.id == "archived", "archived conversation participates in recency order")
         check(scoped.threads.first?.createdAt == 100.125 && scoped.threads.first?.recencyAt == 300.75, "millisecond timestamps retain precision")
-        check(scoped.threads.allSatisfy { $0.name == nil }, "database titles and previews are not projected")
+        check(scoped.threads.allSatisfy { $0.name == "Synthetic conversation title" }, "scoped Codex titles are projected without substituting message previews")
         check(scoped.threads.first { $0.id == "agent" }?.parentThreadId != nil, "derived subagent marker avoids ancestor identity reads")
         check(scoped.isComplete && scoped.issues.isEmpty, "bounded complete recursive index reports coverage")
         check(try Data(contentsOf: url) == before, "read-only index leaves the database unchanged")
@@ -86,6 +86,20 @@ private final class IndexCancellationCounter: @unchecked Sendable {
         check(bounded.threads.count == 2 && !bounded.isComplete && bounded.issues.contains(.threadLimitReached), "row cap reports explicit partial coverage")
         let overlap = try index.read(allowedRoots: ["/fixture/project", "/fixture/project/nested"], limit: 1000)
         check(overlap.threads.count == scoped.threads.count, "overlapping roots do not duplicate rows")
+        let titleURL = directory.appendingPathComponent("titles.sqlite")
+        let titleDB = try fixture(at: titleURL)
+        try insert(titleDB, id: "named", cwd: "/fixture/project")
+        try sql(titleDB, "UPDATE threads SET title='  Native title shown in Codex  ', preview='Ignored message content' WHERE id='named';")
+        let titleIndex = ScopedThreadIndex(databaseURL: titleURL)
+        check(try titleIndex.read(allowedRoots: ["/fixture/project"], limit: 10).threads.first?.name == "Native title shown in Codex",
+              "real metadata titles are trimmed and retained independently of previews")
+        try sql(titleDB, "UPDATE threads SET title='   ' WHERE id='named';")
+        check(try titleIndex.read(allowedRoots: ["/fixture/project"], limit: 10).threads.first?.name == nil,
+              "blank titles remain unnamed instead of showing message previews")
+        try sql(titleDB, "ALTER TABLE threads DROP COLUMN title;")
+        check(try titleIndex.read(allowedRoots: ["/fixture/project"], limit: 10).threads.first?.name == nil,
+              "older title-less indexes retain compatible usage reads")
+        sqlite3_close(titleDB)
         let missing = directory.appendingPathComponent("missing.sqlite")
         let empty = try ScopedThreadIndex(databaseURL: missing).read(allowedRoots: [], limit: 1000)
         check(empty.threads.isEmpty && empty.issues.contains(.scopeRequired) && !FileManager.default.fileExists(atPath: missing.path), "empty scope never opens or creates a database")

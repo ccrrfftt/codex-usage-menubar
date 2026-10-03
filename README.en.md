@@ -4,7 +4,7 @@
 
 Check Codex quota, reset times, and token API equivalents from the macOS menu bar.
 
-**1.7.0** adds token tracking from the activation day and model-specific API equivalents. See [accounting scope and limitations](docs/ACCOUNTING.md).
+**1.7.1** adds integer K/M/B menu values, prominent cycle API equivalents, and real conversation titles. See [accounting scope and limitations](docs/ACCOUNTING.md).
 
 **[Download the latest version](https://github.com/ccrrfftt/codex-usage-menubar/releases/latest)**
 
@@ -25,7 +25,7 @@ Screenshot uses fictional demo data only.
 
 Requires an **Apple Silicon Mac with macOS 14 or later**, and an installed Codex / ChatGPT desktop app signed in to your account.
 
-Version 1.7.0 passed a live quota-read check with Codex 26.930.31730 / CLI 0.160.0 and supports both system and user Applications folders. A clear warning appears when the server blocks included usage.
+Version 1.7.1 uses the verified read-only quota interface in Codex 26.930.31730 / CLI 0.160.0 and supports both system and user Applications folders. A clear warning appears when the server blocks included usage.
 
 1. Download and unzip the latest `Codex-Usage-VERSION-macOS-arm64.zip`.
 2. Drag `Codex Usage.app` into **Applications**, then open it.

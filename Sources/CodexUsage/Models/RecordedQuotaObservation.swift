@@ -43,6 +43,17 @@ struct RecordedQuotaWindow: Decodable, Sendable {
 }
 
 enum RecordedResetInference {
+    /// A fallback window estimate, never an asserted actual reset timestamp.
+    static func scheduledStart(current: AccountingResetTracker, now: Date) -> Date? {
+        guard current.accountID != nil, let minutes = current.windowMinutes,
+              minutes.isFinite, minutes > 0, minutes < 10_000_000,
+              let end = current.nextReset, end > now,
+              let used = current.usedPercent, used.isFinite, used >= 0 else { return nil }
+        let start = end.addingTimeInterval(-minutes * 60)
+        guard start.timeIntervalSince1970.isFinite, start.timeIntervalSince1970 > 0, start <= now else { return nil }
+        return start
+    }
+
     /// An observation's timestamp is an upper bound, not the instant of reset.
     /// Historical headers may be replayed or account-unattributed, so callers
     /// must label this result as an estimate and never replace stronger live evidence.

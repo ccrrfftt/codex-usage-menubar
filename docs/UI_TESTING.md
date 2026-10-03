@@ -183,3 +183,14 @@ manual or optional Computer-tool testing when deeper coverage is needed.
 Save only screenshots of this synthetic app. Record actual observations and
 remaining gaps; do not infer successful interaction from compilation, offline
 PNG renders, or process presence.
+
+
+### 1.7.1 native regression run
+
+The updated primary-value layout completed the same bounded run with 36 passing
+checks, zero failures and 15 existing inspection limitations. Both disclosure
+rows again retained a zero-point top-edge displacement. Cached views show the
+quota and cycle value at equal prominence, the short reset label and titled
+conversation rows. Source-title extraction and reset fallback are additionally
+covered by the 388 synthetic checks; no real conversation titles were used in
+public fixtures.

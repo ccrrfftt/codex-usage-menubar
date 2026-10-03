@@ -185,3 +185,29 @@ physical input and VoiceOver, as detailed in [UI testing](UI_TESTING.md). Settin
 persistence and source replacement are covered by store tests. No private account
 values, conversation content or personal project paths appear in public fixtures.
 The distributable is ad-hoc signed and is not Apple-notarized.
+
+
+## 1.7.1: clearer hierarchy and attribution
+
+The panel now presents remaining quota and cycle API equivalent as matching
+28-point primary values. The detailed table retains cents and coverage markers.
+Menu percentages have no fractional digits; menu amounts switch to integer
+K/M/B at thousands. Partial lower bounds round down and ranges round outward.
+The compact display never changes raw pricing or warning comparisons.
+
+“上次重置” replaces the period-specific row label. Live observed boundaries and
+historical transitions still take priority; otherwise, a valid active schedule
+provides an explicitly approximate start (next reset minus duration). Usage
+before a mid-day reset estimate is excluded. The tooltip distinguishes this
+estimate from an observed reset.
+
+Recent conversations use their stored Codex titles from the authorized local
+scope, with unnamed labels only when metadata is blank or absent. No message
+preview is used. All 388 synthetic checks passed, covering the new format, reset
+boundary and metadata-title behavior. New bilingual light/dark previews were
+inspected; the figures remain aligned and the footer is unclipped.
+
+The 1.7.1 native regression also passed 36 checks with zero failures; both
+expanded sections preserved their top edge. The same 15 accessibility-inspection
+limits remain documented. Source-title support was verified against the local
+database column type only, without querying any actual conversation row.

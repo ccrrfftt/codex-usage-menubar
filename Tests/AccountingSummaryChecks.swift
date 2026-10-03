@@ -71,10 +71,10 @@ struct AccountingSummaryChecks {
             records: [], issues: [.scopeRequired], scannedThreadCount: 0, recordsAreComplete: false)
         let unnamed = AccountingSummary.make(snapshot: unnamedSnapshot, calendar: calendar, reset: .init(),
             now: now, folderCount: 1, language: .english)
-        check(unnamed.conversations.count == 3 && unnamed.conversations[0].title.hasPrefix("Chat 1 · ") &&
-              unnamed.conversations[2].title.hasPrefix("Chat 3 · "),
+        check(unnamed.conversations.count == 3 && unnamed.conversations[0].title.hasPrefix("Unnamed chat 1 · ") &&
+              unnamed.conversations[2].title.hasPrefix("Unnamed chat 3 · "),
               "unnamed conversations stay identifiable by order and timestamp without reading message previews")
-        check(AppLanguage.chinese.accountingConversation(2, updatedAt: now).hasPrefix("对话 2 · "),
+        check(AppLanguage.chinese.accountingConversation(2, updatedAt: now).hasPrefix("未命名对话 2 · "),
               "privacy-preserving conversation labels follow the selected language")
         let nextWindow = date("2026-10-08T00:00:00Z")
         let oldWindow = date("2026-10-01T00:00:00Z")
@@ -103,9 +103,9 @@ struct AccountingSummaryChecks {
             reset: liveTracker, now: now, folderCount: 1, language: .english)
         check(!preferredLive.lastResetFromHistory && preferredLive.lastReset == date("2026-10-01T00:01:00Z"),
               "live account-bound reset evidence takes precedence over historical inference")
-        check(AppLanguage.english.accountingResetTitle(minutes: 10080) == "Since 7-day reset" &&
-              AppLanguage.chinese.accountingResetTitle(minutes: 10080) == "7 天额度重置后",
-              "reset metric identifies which quota period it measures")
+        check(AppLanguage.english.accountingResetTitle(minutes: 10080) == "Since last reset" &&
+              AppLanguage.chinese.accountingResetTitle(minutes: 10080) == "上次重置",
+              "reset row keeps the requested compact bilingual label")
         let trackingStart = date("2026-10-03T00:00:00Z")
         let prospective = AccountingSummary.make(snapshot: snapshot(records), calendar: calendar,
             reset: .init(), now: now, folderCount: 1, language: .english, trackingStart: trackingStart)
@@ -149,6 +149,46 @@ struct AccountingSummaryChecks {
             reset: liveTracker, now: now, folderCount: 1, language: .english, trackingStart: trackingStart)
         check(priorReset.sinceReset.tokens == 1_100 && priorReset.sinceReset.tokensArePartial,
               "a reset before tracking start remains a partial known subtotal")
+        var initialWindow = AccountingResetTracker()
+        initialWindow.observe(accountID: "synthetic-account", window: .init(usedPercent: 30,
+            windowDurationMins: 10080, resetsAt: date("2026-10-10T05:00:00Z").timeIntervalSince1970), at: now)
+        let sameDayRecords = [record("before-reset", "2026-10-03T02:00:00Z"), record("after-reset", "2026-10-03T10:00:00Z")]
+        let initial = AccountingSummary.make(snapshot: snapshot(sameDayRecords), calendar: calendar,
+            reset: initialWindow, now: now, folderCount: 1, language: .english, trackingStart: trackingStart)
+        check(initial.today.tokens == 2_200 && initial.sinceReset.tokens == 1_100 &&
+              initial.lastResetFromSchedule && initial.sinceReset.isEstimated,
+              "an unobserved reset shows an explicit window estimate and excludes earlier usage today")
+        check(initial.lastReset == date("2026-10-03T05:00:00Z") && initialWindow.resetUpperBound == nil,
+              "scheduled fallback never fabricates an observed reset timestamp")
+        check(!preferredLive.lastResetFromSchedule && !historicalSummary.lastResetFromSchedule,
+              "stronger live and historical reset evidence precedes the scheduled estimate")
+        let named = AccountingThread(id: "fixture", name: "A named Codex conversation", updatedAt: now, recencyAt: now, usage: nil)
+        let namedSnapshot = AccountingSnapshot(observedAt: now, account: nil, recentThreads: [named], records: records,
+            issues: [], scannedThreadCount: 1, recordsAreComplete: true)
+        check(AccountingSummary.make(snapshot: namedSnapshot, calendar: calendar, reset: .init(), now: now,
+            folderCount: 1, language: .chinese, trackingStart: trackingStart).conversations.first?.title == named.name,
+            "the real scoped conversation title takes precedence over the unnamed fallback")
+        check(AccountingMetricPresentation(apiUSD: 206.76).menuCostText() == "$207" &&
+              AccountingMetricPresentation(apiUSD: 206.76).costText() == "$206.76",
+              "menu values remove decimals while detailed values retain cents")
+        check(AccountingMetricPresentation(apiUSD: 206.76, costIsPartial: true).menuCostText() == "≥$206",
+              "rounded partial values never overstate a known lower bound")
+        for (value, expected) in [(999.0, "$999"), (999.5, "$1K"), (1200.0, "$1K"),
+            (999_500.0, "$1M"), (1_500_000.0, "$2M"), (999_500_000.0, "$1B"), (2_400_000_000.0, "$2B")] {
+            check(AccountingMetricPresentation(apiUSD: value).menuCostText() == expected,
+                  "compact menu boundary: \(value) → \(expected)")
+        }
+        check(AccountingMetricPresentation(apiUSD: 12.75, costUpperBoundUSD: 13.10).menuCostText() == "$12–14",
+              "integer price ranges retain both outward-rounded bounds")
+        check(AccountingMetricPresentation(apiUSD: 0.2).menuCostText() == "<$1" &&
+              AccountingMetricPresentation().menuCostText() == "—", "small and unavailable amounts remain distinct")
+        check(MenuBarFormatting.percent(14.9) == "14%" && MenuBarFormatting.percent(15) == "15%",
+              "integer percentages remain consistent with the strict below-15 warning")
+        state.lastError = nil
+        state.accountingPresentation.cycle = .init(apiUSD: 199.99)
+        check(state.statusItem.valueTitle == "<$200" && state.statusItem.ring.showsValueWarning &&
+              state.statusItem.tooltip.contains("$199.99"),
+              "rounded menu text cannot contradict the below-$200 marker and tooltip retains detail")
         print("\(count) accounting summary checks passed.")
     }
 }

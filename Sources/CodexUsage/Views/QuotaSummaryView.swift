@@ -4,19 +4,29 @@ struct QuotaSummaryView: View {
     let main: QuotaBucket?
     let now: Date
     let language: AppLanguage
+    var cycleValue: AccountingMetricPresentation = .init()
 
     var body: some View {
         let headline = main?.headline
         let remaining = headline?.remaining
         let percent = quotaPercent(remaining, language: language)
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(percent)
-                    .font(.system(size: 28, weight: .medium, design: .rounded)).monospacedDigit()
-                Text(language.text(.remaining)).font(.caption2).foregroundStyle(.secondary)
-                Spacer()
-                Text(headline?.period(in: language) ?? language.text(.mainLimit))
-                    .font(.caption2).foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(percent)
+                        .font(.system(size: 28, weight: .medium, design: .rounded)).monospacedDigit()
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    Text(language.text(.remaining) + " · " + (headline?.period(in: language) ?? language.text(.mainLimit)))
+                        .font(.caption2).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(cycleValue.menuCostText())
+                        .font(.system(size: 28, weight: .medium, design: .rounded)).monospacedDigit()
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .help(language.accountingCostHelp(cycleValue))
+                    Text(language == .chinese ? "本周期 API 等值" : "Cycle API equivalent")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, alignment: .trailing)
             }
             ProgressView(value: remaining ?? 0, total: 100)
                 .controlSize(.small)

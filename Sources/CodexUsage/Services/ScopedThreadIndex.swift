@@ -72,8 +72,8 @@ struct CodexStateLocation: Sendable {
     }
 }
 
-/// Read-only projection of explicitly scoped thread metadata, never titles or
-/// previews. No migrations, repair, unscoped fallback, or directory enumeration.
+/// Read-only projection of explicitly scoped thread metadata and titles, never
+/// message previews. No migrations, repair, unscoped fallback, or directory enumeration.
 /// Public schema verified at openai/codex b741e480e203f037ca726bc2a76d99a8e8668e66:
 /// state/src/sqlite.rs:38 (state_5.sqlite); state/migrations/0001_threads.sql;
 /// 0021_thread_spawn_edges.sql; 0025_thread_timestamps_millis.sql;
@@ -152,10 +152,11 @@ struct ScopedThreadIndex: ThreadIndexReading {
         let child = hasEdges
             ? "CASE WHEN EXISTS(SELECT 1 FROM thread_spawn_edges e WHERE e.child_thread_id = t.id) OR \(subagentMarker) THEN '' ELSE NULL END"
             : "CASE WHEN \(subagentMarker) THEN '' ELSE NULL END"
+        let title = columns["title"] == "TEXT" ? "NULLIF(trim(t.title), '')" : "NULL"
         let clauses = roots.map { _ in "(t.cwd = ? COLLATE BINARY OR (t.cwd >= ? COLLATE BINARY AND t.cwd < ? COLLATE BINARY))" }
         let activeClause = trackingStart == nil ? "" : "AND (\(updated) >= ? OR \(created) >= ?)"
         let sql = """
-        SELECT t.id, t.rollout_path, t.cwd, \(created), \(updated), \(recency), \(child)
+        SELECT t.id, t.rollout_path, t.cwd, \(created), \(updated), \(recency), \(child), \(title)
         FROM threads t
         WHERE t.model_provider = ? AND trim(lower(t.source)) <> 'internal'
           AND instr(lower(t.source), '\"internal\"') = 0
@@ -206,7 +207,7 @@ struct ScopedThreadIndex: ThreadIndexReading {
             let createdAt = sqlite3_column_double(statement, 3), updatedAt = sqlite3_column_double(statement, 4)
             let recencyAt = sqlite3_column_double(statement, 5)
             guard [createdAt, updatedAt, recencyAt].allSatisfy({ $0.isFinite && $0 >= 0 && $0 < 32_503_680_000 }) else { issues.insert(.invalidRecord); continue }
-            threads.append(AccountingThreadDescriptor(id: id, name: nil, cwd: cwd, path: path,
+            threads.append(AccountingThreadDescriptor(id: id, name: text(statement, 7), cwd: cwd, path: path,
                 createdAt: createdAt, updatedAt: updatedAt, recencyAt: recencyAt, forkedFromId: nil,
                 parentThreadId: text(statement, 6)))
         }

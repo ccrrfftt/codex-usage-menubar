@@ -68,7 +68,7 @@ enum AccountingIssue: String, Sendable, Hashable {
 
 struct AccountingThread: Sendable, Identifiable {
     let id: String
-    /// User-assigned title only. Never substitute a message preview.
+    /// Title from scoped Codex metadata. Never substitute a message preview.
     let name: String?
     let updatedAt: Date
     let recencyAt: Date

@@ -47,7 +47,7 @@ struct DemoImage {
         let totals: [AccountingMetricPresentation] = [
             .init(tokens: 1_280_400, apiUSD: 12.75, costUpperBoundUSD: 13.10),
             .init(tokens: partial ? 1_280_400 : 4_926_220, apiUSD: partial ? 12.75 : 44.60,
-                  tokensArePartial: true, costIsPartial: true),
+                  tokensArePartial: true, costIsPartial: true, isEstimated: partial),
             .init(tokens: partial ? 1_280_400 : 21_780_500, apiUSD: partial ? 12.75 : 148.72,
                   tokensArePartial: partial, costIsPartial: partial)
         ]
@@ -63,15 +63,16 @@ struct DemoImage {
             cycleStart: fixedDate("2030-09-05T00:00:00Z"),
             cycleEnd: fixedDate("2030-10-05T00:00:00Z"),
             lastReset: fixedNow.addingTimeInterval(-4 * 86_400),
-            lastResetLowerBound: fixedNow.addingTimeInterval(-4 * 86_400 - 60),
+            lastResetLowerBound: partial ? nil : fixedNow.addingTimeInterval(-4 * 86_400 - 60),
             resetWindowMinutes: 10_080, sourceFolderCount: 1,
             canCompareSelectedCycle: !partial,
-            trackingStartedAt: fixedDate(partial ? "2030-10-03T00:00:00Z" : "2030-09-05T00:00:00Z"))
+            trackingStartedAt: fixedDate(partial ? "2030-10-03T00:00:00Z" : "2030-09-05T00:00:00Z"),
+            lastResetFromSchedule: partial)
     }
 
     static func panel(snapshot: QuotaSnapshot, accounting: AccountingPresentation,
                       language: AppLanguage, dark: Bool) -> some View {
-        let status = status(remaining: 72, value: accounting.cycle.costText(),
+        let status = status(remaining: 72, value: accounting.cycle.menuCostText(),
                             warning: accounting.canCompareSelectedCycle
                                 && (accounting.cycle.costUpperBoundUSD ?? accounting.cycle.apiUSD ?? .infinity) < 200)
         return VStack(alignment: .leading, spacing: 8) {
@@ -89,7 +90,7 @@ struct DemoImage {
                 Circle().fill(.green).frame(width: 5, height: 5)
                 Text("DEMO").font(.caption2).foregroundStyle(.secondary)
             }
-            QuotaSummaryView(main: snapshot.main, now: fixedNow, language: language)
+            QuotaSummaryView(main: snapshot.main, now: fixedNow, language: language, cycleValue: accounting.cycle)
             ResetCardsView(count: snapshot.resetCardCount, cards: snapshot.resetCards,
                            now: fixedNow, language: language)
             Divider()
@@ -115,7 +116,7 @@ struct DemoImage {
     }
 
     static func status(remaining: Double?, value: String, warning: Bool = false) -> StatusItemState {
-        StatusItemState(title: remaining.map { "\($0.formatted(.number.precision(.fractionLength(0...1))))%" } ?? "—",
+        StatusItemState(title: MenuBarFormatting.percent(remaining),
                         ring: QuotaRingState(remaining: remaining, showsValueWarning: warning),
                         valueTitle: value, tooltip: "Synthetic fixture", accessibilityLabel: "Synthetic fixture",
                         accessibilityValue: value)
@@ -123,9 +124,9 @@ struct DemoImage {
 
     static func statusBoundaryStrip(dark: Bool) -> some View {
         let values: [(String, StatusItemState)] = [
-            ("14.9% · red", status(remaining: 14.9, value: "$148.72", warning: true)),
-            ("15% · normal", status(remaining: 15, value: "$148.72", warning: true)),
-            ("Partial value", status(remaining: 72, value: "≥$174.30")),
+            ("14.9% · red", status(remaining: 14.9, value: "$149", warning: true)),
+            ("15% · normal", status(remaining: 15, value: "$149", warning: true)),
+            ("Partial value", status(remaining: 72, value: "≥$174")),
             ("Unavailable", status(remaining: nil, value: "$—"))
         ]
         return VStack(alignment: .leading, spacing: 12) {

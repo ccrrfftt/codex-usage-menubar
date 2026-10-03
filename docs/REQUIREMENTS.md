@@ -9,7 +9,7 @@ Status: implemented; final native verification and release checklist are recorde
 | Menu bar | Remaining ring and percentage, cycle API-equivalent USD below it | Small system type; vertically centered; no application-name text |
 | Menu bar | Red when remaining quota is strictly below 15% | 14.9% red; 15% neutral; unknown neutral |
 | Ring | Center `!` when current subscription-cycle API equivalent is below USD 200 | Uses the user-confirmed local project scope; a full tracked cycle and price bounds must support the comparison |
-| Panel | Today, since the last observed quota reset, current subscription cycle | Tokens and API-equivalent USD for each; expose missing records and uncertain boundaries |
+| Panel | Today, since the observed or explicitly estimated reset, current subscription cycle | Tokens and API-equivalent USD for each; expose missing records and uncertain boundaries |
 | Panel | Latest three conversations | Tokens accumulated since tracking began, and model-specific equivalents, for the latest conversations in the selected local scope |
 | Settings | Monthly renewal day | Configurable 1–31, month-end clamping, local timezone; no private billing date in public defaults |
 | Sources | Historical per-model accounting | Start at local midnight on first activation and persist that start; selected roots include descendants; no message preview or authentication-file access |
@@ -32,8 +32,9 @@ lifetime totals from the service. Missing records or unknown prices remain visib
 
 The quota API reports the next reset but no authoritative historical last-reset
 instant. A reset observed after tracking begins supplies a polling interval;
-records after its upper bound form a disclosed subtotal. Before usable reset
-evidence exists, that row remains unavailable rather than inventing a boundary.
+records after its upper bound form a disclosed subtotal. If no observation exists, a valid active quota window can provide an explicitly
+estimated boundary. The row uses ≈ until stronger evidence exists; missing or
+expired window context remains unavailable.
 
 ## Existing behavior to preserve
 

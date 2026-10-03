@@ -32,7 +32,7 @@ All accounting follows the existing power-aware polling schedule.
 
 ## Overview
 
-Version 1.7.0 adds token statistics and **current Standard API-equivalent USD**. This comparison is not a bill, credit balance, refund or demonstrated saving.
+Version 1.7.1 provides token statistics and **current Standard API-equivalent USD**. This comparison is not a bill, credit balance, refund or demonstrated saving.
 
 1. 在统计设置中选择每月续费日。周期以本机时区的当天 00:00 划分；日期不足的月份取最后一天。这里只知道续费日，不推断支付平台精确扣费时间。
 2. 选择允许纳入的项目目录。根目录会覆盖其下的工作目录。应用通过只读会话索引查找相应记录，**不会遍历项目源码目录**；相似名称的相邻目录不在范围内。
@@ -44,7 +44,7 @@ Version 1.7.0 adds token statistics and **current Standard API-equivalent USD**.
 | --- | --- |
 | `—` | Required records, model price or period boundary are unavailable. |
 | `≥` | Known lower bound from a partial set of reported records. |
-| `≈` | Estimated legacy telemetry. This is not a guaranteed lower bound. |
+| `≈` | Estimated telemetry or reset boundary. This is not a guaranteed lower bound. |
 | `$a–b` | Applicable token-price bounds for a complete priced scope; missing requests are not included in the upper bound. |
 | Ring `!` | The **selected sources** have a complete current-cycle scan, no estimated current-cycle records, and a priced upper bound below USD 200. The comparison is explicitly local; other devices are outside the accepted scope. |
 
@@ -52,14 +52,14 @@ No value is derived from quota percentage. Unknown models retain their token cou
 
 The three time-period rows use selected local request records from the saved tracking start. Production tracking never substitutes account-wide service-date totals or per-conversation lifetime counters. Those sources do not match the selected local scope and prospective time boundary.
 
-The next quota reset is not proof of the last reset. The app observes a usage drop and a moved reset schedule, preserving the interval between live observations. Post-start records can supply numeric quota snapshots to bootstrap an estimated reset observation for the same current allowance window; unidentified or different-model limits are excluded. The “since reset” row counts records after the interval's end and marks the result partial. The row identifies the allowance period (for example, the 7-day limit). Historical inference is marked estimated because the exact instant and historical account identity are not provided. Without compatible live or historical evidence, it remains unavailable. Account or quota-window changes invalidate previous reset evidence.
+The next quota reset is not proof of the last reset. The app observes a usage drop and a moved reset schedule, preserving the interval between live observations. Post-start records can supply numeric quota snapshots to bootstrap an estimated reset observation for the same current allowance window; unidentified or different-model limits are excluded. The “since reset” row counts records after the interval's end and marks the result partial. The row is labeled “上次重置” / “Since last reset”; its tooltip identifies the allowance period. Historical inference is marked estimated because the exact instant and historical account identity are not provided. When no stronger observation exists, an active quota window supplies a fallback start estimated as next reset minus window duration. The count is marked ≈ and never presented as a confirmed reset. A mid-day estimate excludes earlier records today. Missing or expired window context remains unavailable. Account or quota-window changes invalidate previous reset evidence.
 
-For recent conversations, the app counts each conversation's own local records since the tracking start. Child-agent usage contributes to overall scoped totals but is not rolled into its parent conversation's row. The local index does not read conversation titles. Rows use a sequence number and activity time; an optional explicit service-provided name can still be displayed. Message previews are never substituted as titles.
+For recent conversations, the app counts each conversation's own local records since the tracking start. Child-agent usage contributes to overall scoped totals but is not rolled into its parent conversation's row. The scoped index reads the Codex title for display. A missing or blank title uses an explicitly unnamed timestamp label. Message previews are never substituted as titles.
 
 ## Data and privacy
 
 - Authentication remains inside the installed Codex CLI. This app does not read/copy authentication files, use API keys, call a model, redeem resets or purchase credits.
-- Production tracking calls `account/rateLimits/read` after the standard handshake; it does not request account or conversation lifetime usage. A separate read-only SQLite projection selects thread IDs, times and rollout locations under the chosen roots; it never selects titles or previews. The app-server child keeps its isolated database. See the [official app-server documentation](https://learn.chatgpt.com/docs/app-server).
+- Production tracking calls `account/rateLimits/read` after the standard handshake; it does not request account or conversation lifetime usage. A separate read-only SQLite projection selects thread IDs, titles, times and rollout locations under the chosen roots; it never selects message previews. The app-server child keeps its isolated database. See the [official app-server documentation](https://learn.chatgpt.com/docs/app-server).
 - Empty scope never opens the thread index or calls `thread/list`. Normal operation has no global thread listing. The internal exact-directory compatibility fallback is disabled by default and marks recursive coverage incomplete when explicitly enabled. Rollout paths must be absolute JSONL files beneath configured Codex session roots; symlinks and traversal paths are rejected.
 - The parser decodes only usage metadata. Prompts, responses and previews are not part of its model and are not saved. Modern request records are deduplicated by response ID; inherited fork history is excluded. Legacy cumulative telemetry remains an estimate.
 - Runtime request records and parser caches remain in memory. App preferences hold language, renewal day, selected directories, the fixed tracking start and minimal reset observations. None of these private settings or actual usage records is packaged or published.
@@ -86,3 +86,11 @@ runtime contract check, the response carried per-model relative usage but no
 input, cache, output or total-token fields. Those values are not a substitute for
 API-priceable token counts. No delegated authentication or extra HTTP transport
 was added to the shipped application on that basis.
+
+## Compact presentation
+
+Menu percentages are floored to integers so the visible threshold agrees with
+the strict below-15% warning. Menu dollar values have no decimals and use K/M/B
+from one thousand onward. Known lower bounds round down; price ranges round
+outward. Hover help and table rows retain detailed values. The top panel gives
+remaining quota and cycle API equivalent equal visual prominence.

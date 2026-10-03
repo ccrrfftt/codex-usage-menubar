@@ -44,12 +44,15 @@ enum AccountingSummary {
                 ? RecordedResetInference.upperBound(observations: snapshot.quotaObservations.filter { point in
                     trackingStart.map { point.timestamp >= $0 } ?? true
                 }, current: reset, now: now) : nil
-            if let upper = reset.resetUpperBound ?? historical, upper <= now {
+            let scheduled = reset.resetUpperBound == nil && historical == nil
+                ? RecordedResetInference.scheduledStart(current: reset, now: now) : nil
+            if let upper = reset.resetUpperBound ?? historical ?? scheduled, upper <= now {
                 result.lastReset = upper
                 result.lastResetFromHistory = historical != nil
-                result.lastResetLowerBound = historical == nil ? reset.resetLowerBound : nil
+                result.lastResetFromSchedule = scheduled != nil
+                result.lastResetLowerBound = historical == nil && scheduled == nil ? reset.resetLowerBound : nil
                 result.sinceReset = localMetric(records.filter { $0.timestamp >= upper }, fullPeriod: false)
-                if historical != nil { result.sinceReset.isEstimated = true }
+                if historical != nil || scheduled != nil { result.sinceReset.isEstimated = true }
             }
             result.coverage = snapshot.issues.contains(.historyCatchingUp) ? .loading :
                 (scopeComplete && !records.contains(where: { $0.quality == .estimated }) ? .complete : .partial)
