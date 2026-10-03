@@ -8,13 +8,26 @@ Status: implementation in progress; desktop acceptance and release are pending.
 | --- | --- | --- |
 | Menu bar | Remaining ring and percentage, cycle API-equivalent USD below it | Small system type; vertically centered; no application-name text |
 | Menu bar | Red when remaining quota is strictly below 15% | 14.9% red; 15% neutral; unknown neutral |
-| Ring | Center `!` when current subscription-cycle API equivalent is below USD 200 | Compare explicitly selected sources only when period coverage and price bounds support it; unavailable is not zero |
+| Ring | Center `!` when current subscription-cycle API equivalent is below USD 200 | Must represent the subscription account, not just selected folders; complete coverage and price bounds must support the comparison |
 | Panel | Today, since last actual quota reset, current subscription cycle | Tokens and API-equivalent USD for each; expose missing records and uncertain boundaries |
-| Panel | Latest three conversations | Cumulative tokens and model-specific equivalent; latest within explicitly selected scope |
+| Panel | Latest three conversations | Cumulative tokens and model-specific equivalent for the latest conversations in the requested account scope |
 | Settings | Monthly renewal day | Configurable 1–31, month-end clamping, local timezone; no private billing date in public defaults |
 | Sources | Historical per-model accounting | Explicit folder scope; no global conversation scan; no authentication-file access |
 
 The value is a comparison with current published Standard API prices, not an invoice, a subscription charge or a savings claim. Cached input and cache writes must be distinguished. Reasoning tokens already included in output are not billed again. Request context thresholds must never be applied to accumulated session totals.
+
+## Current implementation is partial
+
+Selected-folder accounting is an explicit partial-data mode, not a replacement
+for the requested whole-account subscription statistics. It cannot prove the
+account-wide $200 comparison or the latest three conversations across devices.
+Those requirements remain open until an authoritative account-level source or
+an explicitly agreed coverage definition is available. The original objective
+must not be marked complete solely because scoped fixtures pass.
+
+The quota API reports the next reset but no authoritative historical last-reset
+instant. The current observed interval is useful evidence with a visible gap;
+it does not reconstruct an unavailable past reset.
 
 ## Existing behavior to preserve
 
