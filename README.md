@@ -40,4 +40,8 @@
 
 [开发说明](DEVELOPMENT.md) · [更新记录](CHANGELOG.md) · [图标来源](Assets/README.md)
 
-个人项目，非 OpenAI 官方应用。仓库暂未附开源许可证。
+个人项目，非 OpenAI 官方应用。
+
+## 许可证
+
+本项目的原创源码和文档采用 [MIT 许可证](LICENSE)。OpenAI 名称、图标等第三方素材（包括截图中的相关标识）不在该许可的授权范围内，详见[图标来源](Assets/README.md)。

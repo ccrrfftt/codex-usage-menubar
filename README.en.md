@@ -40,4 +40,8 @@ A native app with no browser, Python, or API key requirement. It only reads usag
 
 [Development notes (Chinese)](DEVELOPMENT.md) · [Changelog (Chinese)](CHANGELOG.md) · [Icon attribution](Assets/README.md)
 
-A personal project, not an official OpenAI app. No open-source license is currently included.
+A personal project, not an official OpenAI app.
+
+## License
+
+This project's original source code and documentation are licensed under the [MIT License](LICENSE). This license does not grant rights to OpenAI names, logos, or other third-party assets, including those shown in screenshots. See [icon attribution](Assets/README.md).
