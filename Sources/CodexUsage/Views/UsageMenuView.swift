@@ -22,7 +22,7 @@ struct UsageMenuView: View {
                 Text(main?.planType?.uppercased() ?? language.text(.connecting))
                     .font(.caption2).foregroundStyle(.secondary)
             }
-            QuotaSummaryView(main: main, now: state.now, language: language, cycleValue: state.accountingPresentation.cycle)
+            QuotaSummaryView(main: main, now: state.now, language: language)
             ResetCardsView(count: state.snapshot?.resetCardCount, cards: state.snapshot?.resetCards,
                            now: state.now, language: language)
             if let error = state.errorMessage {
@@ -33,11 +33,6 @@ struct UsageMenuView: View {
                 Text(restriction).font(.caption2).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Divider()
-            UsageAccountingView(presentation: state.accountingPresentation, language: language,
-                                setBillingDay: store.setBillingDay,
-                                chooseFolders: store.chooseAccountingFolders,
-                                clearFolders: store.clearAccountingFolders)
             if let others = state.snapshot?.otherBuckets, !others.isEmpty {
                 OtherQuotasView(buckets: others, language: language)
             }
@@ -56,7 +51,7 @@ struct UsageMenuView: View {
             }.controlSize(.small)
         }
         .padding(12)
-        .frame(width: 312, alignment: .topLeading)
+        .frame(width: 276, alignment: .topLeading)
         .fixedSize(horizontal: false, vertical: true)
         .transaction { transaction in
             transaction.animation = nil

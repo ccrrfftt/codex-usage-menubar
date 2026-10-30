@@ -67,7 +67,6 @@ struct ResetCreditBalance: Decodable, Sendable {
 }
 
 struct QuotaSnapshot: Decodable, Sendable {
-    let accountId: String?
     let main: QuotaBucket?
     let otherBuckets: [QuotaBucket]
     let resetCardCount: Int?
@@ -75,13 +74,12 @@ struct QuotaSnapshot: Decodable, Sendable {
     let ordinaryUsageAllowed: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case rateLimits, rateLimitsByLimitId, rateLimitResetCredits, ordinaryUsageAllowed, accountId
+        case rateLimits, rateLimitsByLimitId, rateLimitResetCredits, ordinaryUsageAllowed
     }
 
     // Normalize once on the query queue, not every time SwiftUI reads the snapshot.
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        accountId = try values.decodeIfPresent(String.self, forKey: .accountId)
         // Preserve unavailable permission as nil; percentages and reset times
         // cannot establish whether ordinary included usage is allowed.
         ordinaryUsageAllowed = try values.decodeIfPresent(Bool.self, forKey: .ordinaryUsageAllowed)

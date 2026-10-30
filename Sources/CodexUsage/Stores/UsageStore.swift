@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import AppKit
 
 @MainActor
 final class UsageStore: ObservableObject {
@@ -11,23 +10,11 @@ final class UsageStore: ObservableObject {
     private let preferences: UserDefaults?
     private let uptime: () -> TimeInterval
     private var refreshTask: Task<Void, Never>?
-    private var retiringTasks: [UUID: Task<Void, Never>] = [:]
     private var needsRefreshAfterCooldown = false
     private var lastAttempt: TimeInterval?
     private var lastCompletion: TimeInterval?
     private var failures = 0
     private var stopped = false
-    private var accountingSnapshot: AccountingSnapshot?
-    private var billingDay: Int?
-    private let trackingStart: Date
-    private var accountingFolders: [String] = []
-    private var resetTracker = AccountingResetTracker()
-    private var folderPanel: NSOpenPanel?
-
-    private struct RefreshPayload {
-        let quota: QuotaSnapshot
-        let accounting: AccountingSnapshot?
-    }
 
     init(connection: any QuotaReading = CodexConnection(),
          monitor: SystemActivityMonitor? = SystemActivityMonitor(),
@@ -40,23 +27,9 @@ final class UsageStore: ObservableObject {
         self.scheduler = scheduler
         self.preferences = preferences
         self.uptime = uptime
-        let started = Date.now
-        let savedStart = preferences?.double(forKey: "accountingTrackingStart") ?? 0
-        if savedStart.isFinite && savedStart > 0 && savedStart <= started.timeIntervalSince1970 {
-            trackingStart = Date(timeIntervalSince1970: savedStart)
-        } else {
-            trackingStart = AccountingCalendar(renewalDay: nil).today(containing: started).start
-            preferences?.set(trackingStart.timeIntervalSince1970, forKey: "accountingTrackingStart")
-        }
         state = UsageState(energy: monitor?.state ?? EnergyState(),
                            language: AppLanguage.restored(from: preferences?.string(forKey: AppLanguage.preferenceKey)))
         monitor?.onChange = { [weak self] state in self?.updateSystemState(state) }
-        let day = preferences?.integer(forKey: "billingRenewalDay") ?? 0
-        billingDay = (1...31).contains(day) ? day : nil
-        accountingFolders = preferences?.stringArray(forKey: "accountingFolders") ?? []
-        if let data = preferences?.data(forKey: "resetObservation"),
-           let saved = try? JSONDecoder().decode(AccountingResetTracker.self, from: data) { resetTracker = saved }
-        updateAccountingPresentation()
         if startImmediately { refresh() }
     }
 
@@ -67,13 +40,11 @@ final class UsageStore: ObservableObject {
         next.now = .now
         preferences?.set(next.language.rawValue, forKey: AppLanguage.preferenceKey)
         state = next
-        updateAccountingPresentation()
     }
 
     func prepareForDisplay() {
         guard !stopped else { return }
         state.now = .now
-        updateAccountingPresentation()
         // Opening never postpones the timer or bypasses the normal failure backoff.
         if let interval = EnergyPolicy.refreshInterval(state: state.energy, failures: failures),
            lastCompletion.map({ uptime() - $0 >= interval }) ?? true {
@@ -96,18 +67,9 @@ final class UsageStore: ObservableObject {
         next.isRefreshing = true
         next.now = .now
         state = next
-        let scopes = accountingFolders
-        let cutoff = trackingStart
         refreshTask = Task { [weak self, connection] in
-            let result: Result<RefreshPayload, Error>
-            do {
-                if let dashboardReader = connection as? any DashboardReading {
-                    let dashboard = try await dashboardReader.readDashboard(allowedWorkingDirectories: scopes, trackingStart: cutoff)
-                    result = .success(RefreshPayload(quota: dashboard.quota, accounting: dashboard.accounting))
-                } else {
-                    result = .success(RefreshPayload(quota: try await connection.read(), accounting: nil))
-                }
-            }
+            let result: Result<QuotaSnapshot, Error>
+            do { result = .success(try await connection.read()) }
             catch { result = .failure(error) }
             // A cancelled read must not overwrite a newer request after wake/reconnect.
             guard !Task.isCancelled, let self, !self.stopped else { return }
@@ -120,25 +82,11 @@ final class UsageStore: ObservableObject {
         guard !stopped else { return nil }
         stopped = true
         scheduler.cancel()
-        cancelRefreshForCleanup()
-        let pending = Array(retiringTasks.values)
-        systemMonitor?.stop()
-        folderPanel?.cancel(nil)
-        if let data = try? JSONEncoder().encode(resetTracker) { preferences?.set(data, forKey: "resetObservation") }
-        guard !pending.isEmpty else { return nil }
-        return Task { for cleanup in pending { await cleanup.value } }
-    }
-
-    private func cancelRefreshForCleanup() {
-        guard let pending = refreshTask else { return }
+        let pending = refreshTask
+        pending?.cancel()
         refreshTask = nil
-        pending.cancel()
-        let id = UUID()
-        retiringTasks[id] = pending
-        Task { [weak self] in
-            await pending.value
-            self?.retiringTasks.removeValue(forKey: id)
-        }
+        systemMonitor?.stop()
+        return pending
     }
 
     func updateSystemState(_ energy: EnergyState) {
@@ -148,7 +96,8 @@ final class UsageStore: ObservableObject {
         next.energy = energy
         next.now = .now
         if !energy.allowsRefresh {
-            cancelRefreshForCleanup()
+            refreshTask?.cancel()
+            refreshTask = nil
             next.isRefreshing = false
         }
         state = next
@@ -156,22 +105,15 @@ final class UsageStore: ObservableObject {
         else { scheduleNextRefresh() }
     }
 
-    private func complete(_ result: Result<RefreshPayload, Error>) {
+    private func complete(_ result: Result<QuotaSnapshot, Error>) {
         refreshTask = nil
         lastCompletion = uptime()
         var next = state
         next.isRefreshing = false
         next.now = .now
         switch result {
-        case .success(let payload):
-            let snapshot = payload.quota
+        case .success(let snapshot):
             next.snapshot = snapshot
-            accountingSnapshot = payload.accounting
-            let window = snapshot.main?.windows.max { ($0.windowDurationMins ?? 0) < ($1.windowDurationMins ?? 0) }
-            resetTracker.observe(accountID: snapshot.accountId, window: window, at: next.now)
-            next.accountingPresentation = AccountingSummary.make(snapshot: accountingSnapshot,
-                calendar: AccountingCalendar(renewalDay: billingDay), reset: resetTracker,
-                now: next.now, folderCount: accountingFolders.count, language: next.language, trackingStart: trackingStart)
             next.updatedAt = next.now
             next.lastError = nil
             failures = 0
@@ -181,61 +123,6 @@ final class UsageStore: ObservableObject {
         }
         state = next
         scheduleNextRefresh()
-    }
-
-    func setBillingDay(_ day: Int) {
-        guard !stopped else { return }
-        billingDay = (1...31).contains(day) ? day : nil
-        preferences?.set(billingDay ?? 0, forKey: "billingRenewalDay")
-        updateAccountingPresentation()
-    }
-
-    func chooseAccountingFolders() {
-        guard !stopped, folderPanel == nil else { return }
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = true
-        panel.canCreateDirectories = false
-        if let currentRoot = accountingFolders.first {
-            panel.directoryURL = URL(fileURLWithPath: currentRoot, isDirectory: true)
-        }
-        panel.title = state.language.accountingText(.recordSources)
-        panel.message = state.language == .chinese
-            ? "只统计所选项目目录对应的对话用量记录。"
-            : "Only usage records for conversations in the selected project directories are included."
-        folderPanel = panel
-        NSApp.activate(ignoringOtherApps: true)
-        panel.begin { [weak self] response in
-            guard let self else { return }
-            self.folderPanel = nil
-            guard response == .OK, !self.stopped else { return }
-            self.setAccountingFolders(panel.urls.map { $0.standardizedFileURL.path })
-        }
-    }
-
-    func clearAccountingFolders() { setAccountingFolders([]) }
-
-    func setAccountingFolders(_ folders: [String]) {
-        guard !stopped else { return }
-        let selected = Array(Set(folders.filter { $0.hasPrefix("/") }
-            .map { URL(fileURLWithPath: $0).standardizedFileURL.path })).sorted()
-        guard selected != accountingFolders else { return }
-        // Cancel before replacing scope; a removed source must not return in a late reply.
-        cancelRefreshForCleanup()
-        accountingFolders = selected
-        accountingSnapshot = nil
-        preferences?.set(selected, forKey: "accountingFolders")
-        state.isRefreshing = false
-        updateAccountingPresentation()
-        refresh()
-    }
-
-    private func updateAccountingPresentation() {
-        let presentation = AccountingSummary.make(snapshot: accountingSnapshot,
-            calendar: AccountingCalendar(renewalDay: billingDay), reset: resetTracker,
-            now: state.now, folderCount: accountingFolders.count, language: state.language, trackingStart: trackingStart)
-        if state.accountingPresentation != presentation { state.accountingPresentation = presentation }
     }
 
     private func scheduleNextRefresh() {

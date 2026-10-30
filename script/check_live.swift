@@ -20,7 +20,5 @@ struct LiveCompatibilityCheck {
         print("PASS: production CLI discovery and live quota decoding")
         print("Reset-card balance provided: \(snapshot.resetCardCount != nil)")
         print("Included-usage permission provided: \(snapshot.ordinaryUsageAllowed != nil)")
-        print("Reset-tracking account identity provided: \(snapshot.accountId?.isEmpty == false)")
-        print("Reset-tracking window provided: \(snapshot.main?.windows.contains { $0.usedPercent != nil && $0.windowDurationMins != nil && $0.resetDate != nil } == true)")
     }
 }
