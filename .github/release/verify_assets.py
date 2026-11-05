@@ -17,7 +17,7 @@ MAX_MEMBERS = 100_000
 DIGEST = r"[0-9a-fA-F]{64}"
 SAMPLES = {".env.example", ".env.sample", ".env.template"}
 PRIVATE_FILES = {".git", ".aws", ".ssh", ".netrc", "credentials.json", "id_rsa", "id_ed25519"}
-CREDENTIALS = (
+CREDENTIAL_PATTERNS = (
     ("private key", rb"-----BEGIN (?:[A-Z0-9 ]* )?PRIVATE KEY-----\s+[A-Za-z0-9+/=\r\n]{40,}"),
     ("access token", rb"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,}|xox[bpoas]-[A-Za-z0-9-]{25,})\b"),
     ("Google API key", rb"\bAIza[0-9A-Za-z_-]{35}\b"),
@@ -25,7 +25,7 @@ CREDENTIALS = (
 )
 HOME_PATH = re.compile(rb"(?:/(?:Users|home)/|[A-Za-z]:[\\/]+Users[\\/]+)([A-Za-z0-9][A-Za-z0-9_.-]{0,63})[\\/]", re.I)
 PUBLIC_HOMES = {b"runner", b"runneradmin", b"vsts", b"shared", b"example", b"user", b"username", b"yourname", b"your-user", b"your-username", b"public", b"test", b"testuser", b"node", b"ubuntu", b"build", b"builder"}
-CREDENTIALS = [(label, re.compile(pattern)) for label, pattern in CREDENTIALS]
+CREDENTIALS = [(label, re.compile(pattern)) for label, pattern in CREDENTIAL_PATTERNS]
 
 
 def check_name(name):
@@ -50,6 +50,15 @@ def check_content(data):
             raise ValueError(label)
     if any(m[1].lower() not in PUBLIC_HOMES for m in HOME_PATH.finditer(data)):
         raise ValueError("private home directory path")
+
+
+def location(name):
+    encoded = name.encode("utf-8", errors="replace")
+    try:
+        check_content(encoded)
+    except ValueError:
+        return "redacted name #" + hashlib.sha256(encoded).hexdigest()[:12]
+    return repr(name)
 
 
 def check_link(name, target):
@@ -87,7 +96,7 @@ class Inspector:
                             else:
                                 self.inspect(entry.filename, entry.file_size, member, depth + 1)
                     except ValueError as exc:
-                        raise ValueError(f"{entry.filename!r}: {exc}") from exc
+                        raise ValueError(f"{location(entry.filename)}: {exc}") from exc
         elif name.lower().endswith((".tgz", ".tar.gz", ".tar")):
             with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as archive:
                 for entry in archive:
@@ -103,7 +112,7 @@ class Inspector:
                         elif not entry.isdir():
                             raise ValueError("special file in archive")
                     except ValueError as exc:
-                        raise ValueError(f"{entry.name!r}: {exc}") from exc
+                        raise ValueError(f"{location(entry.name)}: {exc}") from exc
         else:
             check_content(data)
 
@@ -118,13 +127,14 @@ def check_files(directory):
     hashes = {}
     manifests = []
     for path in entries:
+        check_content(path.name.encode("utf-8", errors="replace"))
         if path.is_symlink() or not path.is_file():
-            raise ValueError(f"{path.name!r}: expected regular attachment")
+            raise ValueError(f"{location(path.name)}: expected regular attachment")
         with path.open("rb") as stream:
             try:
                 inspector.inspect(path.name, path.stat().st_size, stream)
             except (ValueError, zipfile.BadZipFile, tarfile.TarError, RuntimeError) as exc:
-                raise ValueError(f"{path.name!r}: {exc}") from exc
+                raise ValueError(f"{location(path.name)}: {exc}") from exc
             stream.seek(0)
             if manifest(path.name):
                 manifests.append(path)
@@ -149,13 +159,13 @@ def check_files(directory):
             elif path.name.lower().endswith(".sha256") and re.fullmatch(DIGEST, line):
                 name, digest = path.name[:-7], line
             else:
-                raise ValueError(f"{path.name!r}: invalid SHA-256 entry")
+                raise ValueError(f"{location(path.name)}: invalid SHA-256 entry")
             name = name.removeprefix("./")
             if name in names or hashes.get(name) != digest.lower():
-                raise ValueError(f"{path.name!r}: duplicate, missing, or mismatched attachment")
+                raise ValueError(f"{location(path.name)}: duplicate, missing, or mismatched attachment")
             names.add(name)
         if not names:
-            raise ValueError(f"{path.name!r}: empty SHA-256 manifest")
+            raise ValueError(f"{location(path.name)}: empty SHA-256 manifest")
         covered.update(names)
     if covered != hashes.keys():
         raise ValueError(f"missing SHA-256 entries for {sorted(hashes.keys() - covered)}")

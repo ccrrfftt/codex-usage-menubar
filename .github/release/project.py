@@ -57,7 +57,7 @@ def package(output):
             raise SystemExit("Packaged version does not match the release commit")
         subprocess.run(["codesign", "--verify", "--deep", "--strict", app], check=True)
         binary = app / "Contents/MacOS/CodexUsage"
-        subprocess.run(["lipo", "-verify_arch", "arm64", binary], check=True)
+        subprocess.run(["lipo", binary, "-verify_arch", "arm64"], check=True)
     shutil.copy2(archive, output)
     shutil.copy2(checksums, output)
 
