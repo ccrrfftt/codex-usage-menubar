@@ -1,0 +1,101 @@
+name: Project Release
+on:
+  pull_request:
+    branches: ['main']
+  push:
+    branches: ['main']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      check: ${{ steps.plan.outputs.check }}
+      package: ${{ steps.plan.outputs.package }}
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: plan
+        name: Compare project versions and identify the merged PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/release/plan.py
+
+  verify:
+    name: Test and verify the package
+    needs: plan
+    if: needs.plan.outputs.check == 'true'
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run project checks
+        run: python3 .github/release/project.py check
+      - name: Prepare and inspect release files
+        if: needs.plan.outputs.package == 'true'
+        shell: bash
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/release-bundle"
+          mkdir -p "$target/assets"
+          python3 .github/release/project.py package "$target/assets"
+          python3 .github/release/verify_assets.py "$target/assets"
+          python3 .github/release/project.py notes "$TAG" > "$target/notes.md"
+          python3 .github/release/project.py prerelease "$TAG" > "$target/prerelease"
+          test -s "$target/notes.md"
+          grep -Exq 'true|false' "$target/prerelease"
+      - name: Transfer verified files to the publishing job
+        if: needs.plan.outputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ github.sha }}
+          path: ${{ runner.temp }}/release-bundle
+          retention-days: 2
+          if-no-files-found: error
+          overwrite: true
+
+  publish:
+    name: Publish verified GitHub Release
+    needs: [plan, verify]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    concurrency:
+      group: project-release-${{ needs.plan.outputs.tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-${{ github.sha }}
+          path: ${{ runner.temp }}/release-bundle
+      - name: Publish the tag, release notes and verified files
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/release-bundle"
+          mkdir -p "$bundle/assets"  # Source-only releases have no uploaded files.
+          python3 .github/release/publish.py "$TAG" "$GITHUB_SHA" "$bundle/assets" "$bundle/notes.md" "$(cat "$bundle/prerelease")"
