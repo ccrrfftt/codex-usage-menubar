@@ -67,6 +67,23 @@ struct QuotaChecks {
         let reference = Date(timeIntervalSince1970: 1000)
         check(resetCountdown(reference.addingTimeInterval(26 * 3600), now: reference, language: .english) == "in 1d 2h", "English reset countdown preserves the duration")
         check(resetCountdown(reference, now: reference, language: .english) == "Waiting for usage update", "English expired-reset state does not invent fresh quota")
+        for (seconds, expected) in [(183600.0, "2d3h"), (86400, "1d0h"), (86399, "23h59m"),
+                                    (8100, "2h15m"), (3600, "1h0m"), (3599, "0h59m"),
+                                    (59, "0h0m"), (0, "—"), (-1, "—")] {
+            let result = compactResetCountdown(reference.addingTimeInterval(seconds), now: reference)
+            check(result.text == expected, "compact reset countdown formats \(seconds) seconds as \(expected)")
+        }
+        let dayReset = reference.addingTimeInterval(86400)
+        let dayBoundary = compactResetCountdown(dayReset, now: reference).updateAt
+        check(dayBoundary.map { compactResetCountdown(dayReset, now: $0).text } == "23h59m",
+              "countdown schedules the transition from days to hours and minutes")
+        let nearReset = reference.addingTimeInterval(59)
+        check(compactResetCountdown(nearReset, now: reference).updateAt == nearReset &&
+              compactResetCountdown(nearReset, now: nearReset).updateAt == nil,
+              "countdown reaches the reset time and stops scheduling afterward")
+        check(compactResetCountdown(nil, now: reference).updateAt == nil &&
+              compactResetCountdown(Date(timeIntervalSince1970: 1e30), now: reference).updateAt == nil,
+              "unknown or oversized reset dates need no countdown updates")
         let exampleDate = ISO8601DateFormatter().date(from: "2026-09-21T00:23:00Z")!
         check(AppLanguage.english.dateTime(exampleDate, includeYear: true).contains("Sep") && AppLanguage.chinese.dateTime(exampleDate, includeYear: true).contains("年"), "date language follows the app rather than the system locale")
         check(AppLanguage.english.cardCount(1) == "1 card" && AppLanguage.english.cardCount(3) == "3 cards", "English reset-card counts have correct singular and plural")
@@ -84,7 +101,31 @@ struct QuotaChecks {
         let oldRing = ringState.statusItem.ring
         ringState.lastError = .timedOut
         check(ringState.statusItem.ring == oldRing && ringState.statusItem.title.hasSuffix(" ·"), "stale data retains the ring with the existing stale indicator")
-        let currentSchema = try decode(#"{"accountId":"demo-account","ordinaryUsageAllowed":true,"rateLimitsByLimitId":{"codex":{"primary":{"usedPercent":28,"windowDurationMins":10080},"individualLimit":null,"normalModelSlug":"demo-model","credits":null}},"rateLimitResetCredits":{"availableCount":1,"credits":[{"status":"available","expiresAt":1896048000}]}}"#)
+        let timed = try decode(#"{"rateLimits":{"primary":{"usedPercent":65,"resetsAt":4600},"secondary":{"usedPercent":80,"resetsAt":3700}}}"#)
+        var timedState = UsageState(snapshot: timed, updatedAt: reference, now: reference, language: .english)
+        check(timedState.statusItem.title == "20%" && timedState.statusItem.countdown == "0h45m" &&
+              timedState.statusItem.accessibilityValue.contains("in 45m"), "both menu-bar rows describe the same quota window")
+        timedState.energy.networkAvailable = false
+        check(timedState.statusItem.countdownUpdateAt != nil && timedState.statusItem.title.hasSuffix(" ·"),
+              "offline countdown still updates from the last available quota")
+        timedState.energy.displaySleeping = true
+        check(timedState.statusItem.countdownUpdateAt == nil, "countdown updates pause when the display sleeps")
+        let currentSchema = try decode(#"""
+        {
+            "accountId": "demo-account",
+            "ordinaryUsageAllowed": true,
+            "rateLimitUpsell": {"banner_type": "example"},
+            "rateLimits": {"primary": {"usedPercent": 28, "windowDurationMins": 10080, "resetsAt": 1896048000}},
+            "rateLimitsByLimitId": {"codex": {
+                "primary": {"usedPercent": 28, "windowDurationMins": 10080, "resetsAt": 1896048000},
+                "individualLimit": null, "normalModelSlug": "demo-model", "credits": null
+            }},
+            "rateLimitResetCredits": {"availableCount": 1, "credits": [{
+                "id": "demo-card", "resetType": "codexRateLimits", "status": "available",
+                "grantedAt": 1890000000, "expiresAt": 1896048000
+            }]}
+        }
+        """#)
         check(currentSchema.main?.headline?.remaining == 72 && currentSchema.resetCardCount == 1 && currentSchema.resetCards?.count == 1, "new optional account fields preserve quota and reset-card decoding")
         let blocked = try decode(#"{"ordinaryUsageAllowed":false,"rateLimits":{"primary":{"usedPercent":20,"resetsAt":100}}}"#)
         let blockedState = UsageState(snapshot: blocked, updatedAt: .now)

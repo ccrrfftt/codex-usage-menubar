@@ -7,21 +7,24 @@ import SwiftUI
 final class StatusItemController: NSObject {
     private let store: UsageStore
     private let item: NSStatusItem
+    private let itemContent = StatusItemContent(frame: .zero)
     private let popover = NSPopover()
+    private let countdownScheduler = RefreshScheduler()
     private var observation: AnyCancellable?
     private var displayedRing: QuotaRingState?
+    private var countdownUpdateAt: Date?
 
     init(store: UsageStore) {
         self.store = store
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         if let button = item.button {
-            // Keep the system menu-bar face, one point smaller than its default size.
-            let defaultSize = NSFont.menuBarFont(ofSize: 0).pointSize
-            button.font = NSFont.menuBarFont(ofSize: max(10, defaultSize - 1))
-            button.imagePosition = .imageLeading
-            button.imageScaling = .scaleProportionallyDown
-            button.alignment = .center
+            itemContent.translatesAutoresizingMaskIntoConstraints = false
+            button.addSubview(itemContent)
+            NSLayoutConstraint.activate([
+                itemContent.centerXAnchor.constraint(equalTo: button.centerXAnchor),
+                itemContent.centerYAnchor.constraint(equalTo: button.centerYAnchor)
+            ])
             button.target = self
             button.action = #selector(togglePopover)
         }
@@ -40,16 +43,30 @@ final class StatusItemController: NSObject {
     private func updateButton(_ state: StatusItemState) {
         guard let button = item.button else { return }
         if displayedRing != state.ring {
-            button.image = StatusItemRing.image(for: state.ring)
+            itemContent.ring.image = StatusItemRing.image(for: state.ring)
             displayedRing = state.ring
         }
-        if button.title != state.title { button.title = state.title }
+        if itemContent.percent.stringValue != state.title || itemContent.countdown.stringValue != state.countdown {
+            itemContent.percent.stringValue = state.title
+            itemContent.countdown.stringValue = state.countdown
+            item.length = ceil(itemContent.fittingSize.width) + 12
+        }
         if button.toolTip != state.tooltip { button.toolTip = state.tooltip }
         if button.accessibilityLabel() != state.accessibilityLabel {
             button.setAccessibilityLabel(state.accessibilityLabel)
         }
         if button.accessibilityValue() as? String != state.accessibilityValue {
             button.setAccessibilityValue(state.accessibilityValue)
+        }
+        if countdownUpdateAt != state.countdownUpdateAt {
+            countdownUpdateAt = state.countdownUpdateAt
+            if let countdownUpdateAt {
+                countdownScheduler.schedule(after: max(0.1, countdownUpdateAt.timeIntervalSinceNow)) { [weak self] in
+                    self?.store.updateDisplayTime()
+                }
+            } else {
+                countdownScheduler.cancel()
+            }
         }
     }
 
@@ -65,5 +82,43 @@ final class StatusItemController: NSObject {
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
     }
+}
 
+@MainActor
+private final class StatusItemContent: NSStackView {
+    let ring = NSImageView()
+    let percent = NSTextField(labelWithString: "")
+    let countdown = NSTextField(labelWithString: "")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        orientation = .horizontal
+        alignment = .centerY
+        distribution = .fill
+        spacing = 4
+        ring.imageScaling = .scaleNone
+        ring.contentTintColor = .labelColor
+        ring.setAccessibilityElement(false)
+        percent.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
+        countdown.font = .monospacedDigitSystemFont(ofSize: 8, weight: .regular)
+        countdown.textColor = .secondaryLabelColor
+        for label in [percent, countdown] {
+            label.alignment = .center
+            label.setAccessibilityElement(false)
+        }
+
+        let labels = NSStackView(views: [percent, countdown])
+        labels.orientation = .vertical
+        labels.alignment = .centerX
+        labels.distribution = .fill
+        labels.spacing = 0
+        addArrangedSubview(ring)
+        addArrangedSubview(labels)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    // Let the native status button handle clicks anywhere in the item.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

@@ -44,12 +44,17 @@ final class UsageStore: ObservableObject {
 
     func prepareForDisplay() {
         guard !stopped else { return }
-        state.now = .now
+        updateDisplayTime()
         // Opening never postpones the timer or bypasses the normal failure backoff.
         if let interval = EnergyPolicy.refreshInterval(state: state.energy, failures: failures),
            lastCompletion.map({ uptime() - $0 >= interval }) ?? true {
             refresh()
         }
+    }
+
+    func updateDisplayTime() {
+        guard !stopped else { return }
+        state.now = .now
     }
 
     func refresh() {
