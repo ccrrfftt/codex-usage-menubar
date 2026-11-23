@@ -70,9 +70,13 @@
 
 版本与构建号以 `script/build_and_run.sh` 生成的 Info.plist 为唯一来源。兼容的新功能升次版本，不兼容变更升主版本，修复和维护升补丁版本。`script/package.sh` 从 App 读取版本，并将版本、平台和架构写入 ZIP 文件名。
 
-每个合入 `main` 的 PR 都发布一个新版本，文档、测试和 CI 改动也适用。合并前须将版本和构建号升至目标分支之上，使用尚未使用的版本号，并更新 `CHANGELOG.md`。条目沿用 `## X.Y.Z · 日期`，测试版在标题末尾加上「预发布」。其他 PR 先合入时，更新分支并重新递增版本和构建号。
+改动 App 源码、Swift 包配置、安装包图标或构建打包脚本的 PR，在同一条 PR 中更新应用版本号、构建号和 `CHANGELOG.md`。版本和构建号须高于最新的 `main`，版本标签须可用。变更条目沿用 `## X.Y.Z · 日期`，测试版在标题最后加「预发布」。在同一 PR 补交修复时沿用计划版本。如果其他 PR 先占用了该版本，更新分支后重新选择版本和构建号。
 
-必需的 `plan` 检查拦截未升版、未递增构建号和已占用标签。合并前在 Apple Silicon 上运行检查、验证变更记录并打包，核验 ZIP 的版本、签名和 SHA-256。合入 `main` 后，从合并提交重新构建并验证，再发布 Git 标签、GitHub Release、安装包和校验文件。
+在本机运行 `./script/check.sh` 验证 App 改动。指向 `main` 的 PR 在 GitHub 上运行 Ubuntu 的 `plan` 检查，核对版本、构建号、标签和更新记录。文档、测试和 CI 维护的 PR 可以沿用当前版本。
+
+App 改动合入 `main` 后，Actions 在 Apple Silicon runner 上从合并提交构建和打包，核验 ZIP 里的版本、签名、架构和 SHA-256，再发布 Git 标签、GitHub Release 与下载附件。正式版通过后更新 Releases 的 Latest 入口。项目测试在本机执行。
+
+需要补发 `main` 上已经合入且尚未发布的版本时，在 GitHub Actions 的 **Project Release** 中选择 `main`，开启 **Publish the current version from main after verifying the ZIP** 后运行。默认手动运行只验证打包。若某次发布已经创建了标签或草稿，优先重跑原工作流，沿用原发布提交。
 
 ## 结构
 

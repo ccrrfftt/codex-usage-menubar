@@ -1,4 +1,4 @@
-"""Determine whether this run should test, package, or publish a GitHub Release."""
+"""Validate PR release metadata and plan GitHub Release packaging."""
 
 import json
 import os
@@ -9,7 +9,18 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode
 
-from project import version_info
+from project import changelog_section, version_info
+
+# These are the inputs for the Swift package and the downloadable App ZIP.
+APP_INPUTS = (
+    "Sources/",
+    "Package.swift",
+    "Package.resolved",
+    "Assets/AppIcon.png",
+    "script/build_and_run.sh",
+    "script/generate_icon.sh",
+    "script/package.sh",
+)
 
 
 def run(*args):
@@ -57,36 +68,46 @@ def main():
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     sha = os.environ["GITHUB_SHA"]
     tag, build = version(sha)
-    check = event_name != "push"
     package = event_name == "workflow_dispatch"
     publish = False
     message = f"Verify {tag} without publishing."
     before = None
-    if event_name == "pull_request":
+    if event_name == "workflow_dispatch" and event.get("inputs", {}).get("publish") in (True, "true"):
+        if os.environ["GITHUB_REF"] != "refs/heads/main":
+            sys.exit("Manual publication requires the main branch.")
+        publish = True
+        message = f"Verify and publish {tag} from main."
+    elif event_name == "pull_request":
         before = event["pull_request"]["base"]["sha"]
     elif event_name == "push" and not event["created"] and not event["deleted"]:
         before = event["before"]
     if before:
         old, old_build = version(before)
+        app_changed = bool(run("git", "diff", "--name-only", before, sha, "--", *APP_INPUTS))
+        version_increased = version_key(tag) > version_key(old)
+        if app_changed and not version_increased:
+            sys.exit(f"App changes require a version above {old}; found {tag}.")
         if event_name == "pull_request":
-            if version_key(tag) <= version_key(old):
-                sys.exit(f"Every PR must increase the app version above {old}; found {tag}.")
-            if build <= old_build:
-                sys.exit(f"Every PR must increase the build number above {old_build}; found {build}.")
-            if run("git", "tag", "--list", tag):
-                sys.exit(f"Release tag {tag} already exists. Choose an unused version.")
-            package = True
-        elif version_key(tag) > version_key(old):
+            if app_changed:
+                if build <= old_build:
+                    sys.exit(f"App releases require a build number above {old_build}; found {build}.")
+                if run("git", "tag", "--list", tag):
+                    sys.exit(f"Release tag {tag} already exists. Choose an unused version.")
+                changelog_section(tag)
+            message = f"PR version and release notes verified for {tag}." if app_changed else (
+                "PR changes only files outside the App package."
+            )
+        elif version_increased:
             number = merged_pr(os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_REF_NAME"], sha)
             if number:
-                check = package = publish = True
+                package = publish = True
                 message = f"PR #{number} merged: verify and publish {old} → {tag}."
             else:
                 message = f"No merged PR matches this push; skip release of {tag}."
         else:
             message = f"No new version ({old} → {tag}); skip release."
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-        for key, value in dict(tag=tag, check=check, package=package, publish=publish).items():
+        for key, value in dict(tag=tag, package=package, publish=publish).items():
             print(f"{key}={str(value).lower() if isinstance(value, bool) else value}", file=output)
     print(message)
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
