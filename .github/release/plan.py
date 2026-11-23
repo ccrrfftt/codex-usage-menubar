@@ -9,7 +9,18 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode
 
-from project import version_info
+from project import changelog_section, version_info
+
+# These are the inputs for the Swift package and the downloadable App ZIP.
+APP_INPUTS = (
+    "Sources/",
+    "Package.swift",
+    "Package.resolved",
+    "Assets/AppIcon.png",
+    "script/build_and_run.sh",
+    "script/generate_icon.sh",
+    "script/package.sh",
+)
 
 
 def run(*args):
@@ -68,15 +79,23 @@ def main():
         before = event["before"]
     if before:
         old, old_build = version(before)
+        app_changed = bool(run("git", "diff", "--name-only", before, sha, "--", *APP_INPUTS))
+        version_increased = version_key(tag) > version_key(old)
+        if app_changed and not version_increased:
+            sys.exit(f"App changes require a version above {old}; found {tag}.")
         if event_name == "pull_request":
-            if version_key(tag) <= version_key(old):
-                sys.exit(f"Every PR must increase the app version above {old}; found {tag}.")
-            if build <= old_build:
-                sys.exit(f"Every PR must increase the build number above {old_build}; found {build}.")
-            if run("git", "tag", "--list", tag):
-                sys.exit(f"Release tag {tag} already exists. Choose an unused version.")
-            package = True
-        elif version_key(tag) > version_key(old):
+            if app_changed:
+                if build <= old_build:
+                    sys.exit(f"App releases require a build number above {old_build}; found {build}.")
+                if run("git", "tag", "--list", tag):
+                    sys.exit(f"Release tag {tag} already exists. Choose an unused version.")
+                changelog_section(tag)
+            release_config_changed = run(
+                "git", "diff", "--name-only", before, sha, "--",
+                ".github/release/", ".github/workflows/project-release.yml",
+            )
+            package = app_changed or bool(release_config_changed)
+        elif version_increased:
             number = merged_pr(os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_REF_NAME"], sha)
             if number:
                 check = package = publish = True
