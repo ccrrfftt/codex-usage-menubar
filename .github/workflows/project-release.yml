@@ -2,6 +2,7 @@ name: Project Release
 on:
   pull_request:
     branches: ['main']
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: ['main']
   workflow_dispatch:
@@ -10,6 +11,10 @@ on:
         description: Publish the current version from main after verifying the ZIP
         type: boolean
         default: false
+      merged_sha:
+        description: Verify and publish this previously merged PR commit when it changes the App version
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -22,6 +27,7 @@ jobs:
       pull-requests: read
     outputs:
       tag: ${{ steps.plan.outputs.tag }}
+      sha: ${{ steps.plan.outputs.sha }}
       package: ${{ steps.plan.outputs.package }}
       publish: ${{ steps.plan.outputs.publish }}
     steps:
@@ -44,6 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ needs.plan.outputs.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Prepare and inspect release files
@@ -64,7 +71,7 @@ jobs:
         if: needs.plan.outputs.publish == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-${{ github.sha }}
+          name: release-${{ needs.plan.outputs.sha }}
           path: ${{ runner.temp }}/release-bundle
           retention-days: 2
           if-no-files-found: error
@@ -84,10 +91,11 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ needs.plan.outputs.sha }}
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: release-${{ github.sha }}
+          name: release-${{ needs.plan.outputs.sha }}
           path: ${{ runner.temp }}/release-bundle
       - name: Publish the tag, release notes and verified files
         shell: bash
@@ -95,8 +103,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.plan.outputs.tag }}
+          RELEASE_SHA: ${{ needs.plan.outputs.sha }}
         run: |
           set -euo pipefail
           bundle="$RUNNER_TEMP/release-bundle"
           mkdir -p "$bundle/assets"  # Source-only releases have no uploaded files.
-          python3 .github/release/publish.py "$TAG" "$GITHUB_SHA" "$bundle/assets" "$bundle/notes.md" "$(cat "$bundle/prerelease")"
+          python3 .github/release/publish.py "$TAG" "$RELEASE_SHA" "$bundle/assets" "$bundle/notes.md" "$(cat "$bundle/prerelease")"
