@@ -7,9 +7,8 @@ struct EnergyState: Equatable, Sendable {
     var sessionInactive = false
     var networkAvailable = true
 
-    var allowsRefresh: Bool {
-        !systemSleeping && !displaySleeping && !sessionInactive && networkAvailable
-    }
+    var allowsDisplayUpdates: Bool { !systemSleeping && !displaySleeping && !sessionInactive }
+    var allowsRefresh: Bool { allowsDisplayUpdates && networkAvailable }
 }
 
 enum EnergyPolicy {

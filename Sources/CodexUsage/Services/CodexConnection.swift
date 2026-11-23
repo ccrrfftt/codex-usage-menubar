@@ -54,18 +54,36 @@ final class CodexConnection: QuotaReading, @unchecked Sendable {
             "Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
             "Contents/Resources/codex"
         ]
-        let candidates = applicationDirectories.flatMap { directory in
-            ["ChatGPT.app", "Codex.app"].flatMap { app in
-                relativePaths.map { directory.appendingPathComponent(app).appendingPathComponent($0).path }
-            }
-        } + standalonePaths
         let files = FileManager.default
-        guard let path = candidates.first(where: { path in
+        func isExecutable(_ url: URL) -> Bool {
             var isDirectory: ObjCBool = false
-            return files.fileExists(atPath: path, isDirectory: &isDirectory) &&
-                !isDirectory.boolValue && files.isExecutableFile(atPath: path)
-        }) else { throw QuotaError.unavailable }
-        return URL(fileURLWithPath: path)
+            return files.fileExists(atPath: url.path, isDirectory: &isDirectory) &&
+                !isDirectory.boolValue && files.isExecutableFile(atPath: url.path)
+        }
+        func bundledExecutable(in apps: [URL]) -> URL? {
+            apps.lazy.flatMap { app in relativePaths.map { app.appendingPathComponent($0) } }
+                .first(where: isExecutable)
+        }
+
+        let standardApps = applicationDirectories.flatMap { directory in
+            ["ChatGPT.app", "Codex.app"].map { directory.appendingPathComponent($0, isDirectory: true) }
+        }
+        if let executable = bundledExecutable(in: standardApps) { return executable }
+
+        // The combined ChatGPT app still uses the Codex bundle identifier, even
+        // when users rename it or keep a separate copy of ChatGPT Classic.
+        for directory in applicationDirectories {
+            let apps = try? files.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil,
+                                                      options: .skipsHiddenFiles)
+            let renamedApps = (apps ?? []).filter { app in
+                app.pathExtension == "app" && Bundle(url: app)?.bundleIdentifier == "com.openai.codex"
+            }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+            if let executable = bundledExecutable(in: renamedApps) { return executable }
+        }
+
+        let standaloneExecutables = standalonePaths.lazy.map { URL(fileURLWithPath: $0) }
+        guard let executable = standaloneExecutables.first(where: isExecutable) else { throw QuotaError.unavailable }
+        return executable
     }
 }
 
