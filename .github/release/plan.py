@@ -67,12 +67,22 @@ def main():
     event_name = os.environ["GITHUB_EVENT_NAME"]
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     sha = os.environ["GITHUB_SHA"]
+    inputs = event.get("inputs", {}) if event_name == "workflow_dispatch" else {}
+    merged_sha = inputs.get("merged_sha")
+    before = None
+    if merged_sha:
+        if os.environ["GITHUB_REF"] != "refs/heads/main" or not re.fullmatch(r"[0-9a-f]{40}", merged_sha):
+            sys.exit("A release for a specific merge requires main and a full commit SHA.")
+        if subprocess.call(["git", "merge-base", "--is-ancestor", merged_sha, sha]) != 0:
+            sys.exit("The requested merge commit is not on main.")
+        sha = merged_sha
+        before = run("git", "rev-parse", f"{sha}^1")
+
     tag, build = version(sha)
-    package = event_name == "workflow_dispatch"
+    package = event_name == "workflow_dispatch" and not merged_sha
     publish = False
     message = f"Verify {tag} without publishing."
-    before = None
-    if event_name == "workflow_dispatch" and event.get("inputs", {}).get("publish") in (True, "true"):
+    if not merged_sha and inputs.get("publish") in (True, "true"):
         if os.environ["GITHUB_REF"] != "refs/heads/main":
             sys.exit("Manual publication requires the main branch.")
         publish = True
@@ -107,7 +117,7 @@ def main():
         else:
             message = f"No new version ({old} → {tag}); skip release."
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-        for key, value in dict(tag=tag, package=package, publish=publish).items():
+        for key, value in dict(tag=tag, sha=sha, package=package, publish=publish).items():
             print(f"{key}={str(value).lower() if isinstance(value, bool) else value}", file=output)
     print(message)
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:

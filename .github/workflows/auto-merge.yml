@@ -1,0 +1,62 @@
+name: Auto-merge repository PRs
+
+on:
+  workflow_run:
+    workflows: ['Project Release']
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.id == github.event.repository.id &&
+      github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
+      github.event.workflow_run.pull_requests[0].base.repo.id == github.event.repository.id
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: auto-merge-pr-${{ github.event.workflow_run.pull_requests[0].number }}
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Merge the checked PR and dispatch its release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          CHECKED_HEAD: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          endpoint="repos/$GH_REPO/pulls/$PR_NUMBER"
+          pr=$(gh api "$endpoint")
+          if ! jq -e --arg repo "$GH_REPO" --arg sha "$CHECKED_HEAD" '
+            .draft == false and .base.ref == "main" and
+            .base.repo.full_name == $repo and .head.repo.full_name == $repo and
+            .head.sha == $sha
+          ' <<<"$pr" >/dev/null; then
+            echo "The checked commit is no longer on an eligible PR."
+            exit 0
+          fi
+
+          if jq -e '.state == "open"' <<<"$pr" >/dev/null; then
+            merge_sha=$(gh api --method PUT "$endpoint/merge" \
+              -f merge_method=merge -f sha="$CHECKED_HEAD" \
+              --jq 'select(.merged == true) | .sha')
+          elif jq -e '.merged and .merged_by.login == "github-actions[bot]"' <<<"$pr" >/dev/null; then
+            # Retry the handoff if a previous run merged successfully.
+            merge_sha=$(jq -r '.merge_commit_sha' <<<"$pr")
+          else
+            echo "The PR has already been closed or merged."
+            exit 0
+          fi
+
+          [[ "$merge_sha" =~ ^[0-9a-f]{40}$ ]]
+          # Merges made by GITHUB_TOKEN do not trigger the push workflow.
+          gh workflow run project-release.yml --repo "$GH_REPO" --ref main -f merged_sha="$merge_sha"
+          echo "Dispatched release planning for $merge_sha."
