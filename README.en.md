@@ -4,7 +4,7 @@
 
 Check your Codex remaining quota, reset times, and reset-card expiry dates from the macOS menu bar.
 
-**Current recommended release is 1.8.1 (build 15).**
+**Current recommended release is 1.8.2 (build 16).**
 
 **[Download the latest version](https://github.com/ccrrfftt/codex-usage-menubar/releases/latest)**
 
@@ -14,7 +14,7 @@ Check your Codex remaining quota, reset times, and reset-card expiry dates from 
 
 Screenshot uses fictional demo data only.
 
-- **Menu bar quota and reset.** The ring follows your remaining allowance and turns red below 20%. The percentage appears above the countdown for the same quota window. Click for details.
+- **Menu bar quota and reset.** The ring follows your remaining allowance and turns red below 20%. The bold percentage and its reset countdown are centered on separate lines. Click for details.
 - **Reset cards:** view the available count and each card's expiry date.
 - **Chinese and English:** click **EN / 中文** at the top right of the panel. Your choice is remembered.
 - **Automatic updates:** every minute on AC power, every 5 minutes on battery; paused while asleep or offline.
