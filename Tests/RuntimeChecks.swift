@@ -152,7 +152,9 @@ struct RuntimeChecks {
         let info = renamedApp.appendingPathComponent("Contents/Info.plist")
         let plist = try PropertyListEncoder().encode(["CFBundleIdentifier": "com.openai.codex"])
         try plist.write(to: info)
-        check(try discover([standalone.path]) == renamed, "renamed ChatGPT bundle is discovered by the Codex bundle identifier")
+        let discovered = try discover([standalone.path])
+        check(discovered.resolvingSymlinksInPath().path == renamed.resolvingSymlinksInPath().path,
+              "renamed ChatGPT bundle is discovered by the Codex bundle identifier")
         try files.removeItem(at: renamedApp)
         let unreadable = try fixture("ChatGPT.app/Contents/Resources/codex-cli/bin/codex", executable: false)
         check(try discover([standalone.path]) == standalone, "non-executable candidates are skipped")
