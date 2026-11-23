@@ -4,7 +4,7 @@
 
 Check your Codex remaining quota, reset times, and reset-card expiry dates from the macOS menu bar.
 
-**Current recommended release is 1.8.0 (build 14).**
+**Current recommended release is 1.8.1 (build 15).**
 
 **[Download the latest version](https://github.com/ccrrfftt/codex-usage-menubar/releases/latest)**
 

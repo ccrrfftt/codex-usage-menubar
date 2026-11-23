@@ -4,7 +4,7 @@
 
 在 Mac 顶部菜单栏查看 Codex 剩余额度、重置时间和重置卡到期日期。
 
-**当前推荐版本 1.8.0（build 14）**
+**当前推荐版本 1.8.1（build 15）**
 
 **[下载最新版](https://github.com/ccrrfftt/codex-usage-menubar/releases/latest)**
 

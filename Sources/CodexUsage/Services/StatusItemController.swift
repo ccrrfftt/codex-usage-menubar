@@ -100,8 +100,7 @@ private final class StatusItemContent: NSStackView {
         ring.contentTintColor = .labelColor
         ring.setAccessibilityElement(false)
         percent.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
-        countdown.font = .monospacedDigitSystemFont(ofSize: 8, weight: .regular)
-        countdown.textColor = .secondaryLabelColor
+        countdown.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         for label in [percent, countdown] {
             label.alignment = .center
             label.setAccessibilityElement(false)
@@ -111,7 +110,7 @@ private final class StatusItemContent: NSStackView {
         labels.orientation = .vertical
         labels.alignment = .centerX
         labels.distribution = .fill
-        labels.spacing = 0
+        labels.spacing = -5 // Keep both label frames within a 22-point status item.
         addArrangedSubview(ring)
         addArrangedSubview(labels)
     }
