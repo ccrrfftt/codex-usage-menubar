@@ -20,9 +20,9 @@ struct DemoImage {
         HStack(spacing: 4) {
             Image(nsImage: StatusItemRing.image(for: ring))
                 .renderingMode(ring.isLow ? .original : .template)
-            VStack(spacing: -4) {
+            VStack(spacing: -5) {
                 Text(percentage).font(.system(size: 10, weight: .medium).monospacedDigit())
-                Text(countdown).font(.system(size: 10).monospacedDigit())
+                Text(countdown).font(.system(size: 11).monospacedDigit())
             }
         }
     }
