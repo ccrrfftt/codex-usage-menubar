@@ -4,7 +4,7 @@
 
 Check your Codex remaining quota, reset times, and reset-card expiry dates from the macOS menu bar.
 
-**Current recommended release: 1.6.2 (build 11).** Restored as the latest stable release on 2026-10-30. The token-accounting and monetary-estimate approach in 1.7.0 and 1.7.1 has been discontinued. The main branch restores the 1.6.2 app code and screenshot while retaining the MIT license.
+**Current recommended release is 1.8.0 (build 14).**
 
 **[Download the latest version](https://github.com/ccrrfftt/codex-usage-menubar/releases/latest)**
 
@@ -14,7 +14,7 @@ Check your Codex remaining quota, reset times, and reset-card expiry dates from 
 
 Screenshot uses fictional demo data only.
 
-- **Remaining-quota ring:** the arc follows your remaining allowance and turns red below 20%. The percentage stays beside it; click for details.
+- **Menu bar quota and reset.** The ring follows your remaining allowance and turns red below 20%. The percentage appears above the countdown for the same quota window. Click for details.
 - **Reset cards:** view the available count and each card's expiry date.
 - **Chinese and English:** click **EN / 中文** at the top right of the panel. Your choice is remembered.
 - **Automatic updates:** every minute on AC power, every 5 minutes on battery; paused while asleep or offline.
@@ -23,7 +23,7 @@ Screenshot uses fictional demo data only.
 
 Requires an **Apple Silicon Mac with macOS 14 or later**, and an installed Codex / ChatGPT desktop app signed in to your account.
 
-Version 1.6.2 is verified with Codex 26.928.20755 / CLI 0.159.0 and supports both system and user Applications folders. A clear warning appears when the server blocks included usage.
+The app searches both system and user Applications folders and recognizes renamed ChatGPT desktop installations. The bundled CLI path was checked against ChatGPT 26.1117.41037. A warning appears when the server blocks included usage.
 
 1. Download and unzip the latest `Codex-Usage-VERSION-macOS-arm64.zip`.
 2. Drag `Codex Usage.app` into **Applications**, then open it.

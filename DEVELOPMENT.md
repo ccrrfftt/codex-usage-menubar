@@ -68,9 +68,11 @@
 
 构建目录为 `.build/local`，也可以用 `CODEX_USAGE_BUILD_ROOT` 指定其他位置。日常构建默认为 Debug，可用 `CODEX_USAGE_CONFIGURATION=release` 覆盖；打包始终使用 Release。Codex 项目里的 Run 动作指向同一个构建入口。
 
-版本与构建号以 `script/build_and_run.sh` 生成的 Info.plist 为唯一来源。新增兼容功能增加次版本，修复增加补丁版本，每次发布递增构建号；`script/package.sh` 自动从 App 读取版本并将版本、平台和架构写入 ZIP 文件名。
+版本与构建号以 `script/build_and_run.sh` 生成的 Info.plist 为唯一来源。兼容的新功能升次版本，不兼容变更升主版本，修复和维护升补丁版本。`script/package.sh` 从 App 读取版本，并将版本、平台和架构写入 ZIP 文件名。
 
-准备发布的 PR 时，同时更新上述版本、构建号和 `CHANGELOG.md`。版本条目沿用 `## X.Y.Z · 日期`，测试版在同一标题末尾加上「预发布」。合入 `main` 后，发布流程读取新版本的变更记录，在 Apple Silicon 上运行检查、打包并核验 ZIP 内的版本、签名和 SHA-256，再发布该版本。普通 PR 保持应用版本不变。
+每个合入 `main` 的 PR 都发布一个新版本，文档、测试和 CI 改动也适用。合并前须将版本和构建号升至目标分支之上，使用尚未使用的版本号，并更新 `CHANGELOG.md`。条目沿用 `## X.Y.Z · 日期`，测试版在标题末尾加上「预发布」。其他 PR 先合入时，更新分支并重新递增版本和构建号。
+
+必需的 `plan` 检查拦截未升版、未递增构建号和已占用标签。合并前在 Apple Silicon 上运行检查、验证变更记录并打包，核验 ZIP 的版本、签名和 SHA-256。合入 `main` 后，从合并提交重新构建并验证，再发布 Git 标签、GitHub Release、安装包和校验文件。
 
 ## 结构
 

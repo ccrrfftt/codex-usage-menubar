@@ -16,25 +16,33 @@ struct DemoProgressStyle: ProgressViewStyle {
 // Offline documentation fixture. No account, Codex process, network, or preferences are read.
 @main @MainActor
 struct DemoImage {
+    private static func menuBarItem(ring: QuotaRingState, percentage: String, countdown: String) -> some View {
+        HStack(spacing: 4) {
+            Image(nsImage: StatusItemRing.image(for: ring))
+                .renderingMode(ring.isLow ? .original : .template)
+            VStack(spacing: 0) {
+                Text(percentage).font(.system(size: 10, weight: .medium).monospacedDigit())
+                Text(countdown).font(.system(size: 8).monospacedDigit()).foregroundStyle(.secondary)
+            }
+        }
+    }
+
     static func main() throws {
         _ = NSApplication.shared
         let fixedNow = Date(timeIntervalSince1970: 1893456000) // 2030-01-01 00:00 UTC
         let data = Data(#"{"rateLimits":{"planType":"demo","primary":{"usedPercent":28,"windowDurationMins":10080,"resetsAt":1893715200}},"rateLimitResetCredits":{"availableCount":2,"credits":[{"status":"available","expiresAt":1896048000},{"status":"available","expiresAt":1898467200}]}}"#.utf8)
         let snapshot = try JSONDecoder().decode(QuotaSnapshot.self, from: data)
+        let status = UsageState(snapshot: snapshot, updatedAt: fixedNow, now: fixedNow).statusItem
         let content = VStack(alignment: .leading, spacing: 12) {
             Label("演示数据 · SAMPLE DATA", systemImage: "photo.badge.checkmark")
                 .font(.system(size: 11, weight: .semibold)).foregroundStyle(.blue)
             HStack(spacing: 4) {
                 Text("菜单栏").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Image(nsImage: StatusItemRing.image(for: QuotaRingState(remaining: 72)))
-                    .renderingMode(.template)
-                Text("72%")
+                menuBarItem(ring: status.ring, percentage: status.title, countdown: status.countdown)
                 Spacer().frame(width: 16)
-                Image(nsImage: StatusItemRing.image(for: QuotaRingState(remaining: 18)))
-                    .renderingMode(.original)
-                Text("18%")
-            }.font(.system(size: 12))
+                menuBarItem(ring: QuotaRingState(remaining: 18), percentage: "18%", countdown: "0h45m")
+            }
             Divider()
             HStack {
                 Text("Codex 用量").font(.system(size: 13, weight: .semibold))

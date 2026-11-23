@@ -9,15 +9,18 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode
 
+from project import version_info
+
 
 def run(*args):
     return subprocess.check_output(args, text=True).strip()
 
 
 def version(ref):
-    tag = run(sys.executable, ".github/release/project.py", "version", ref)
+    number, build = version_info(ref)
+    tag = f"v{number}"
     version_key(tag)
-    return tag
+    return tag, int(build)
 
 
 def version_key(tag):
@@ -53,7 +56,7 @@ def main():
     event_name = os.environ["GITHUB_EVENT_NAME"]
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     sha = os.environ["GITHUB_SHA"]
-    tag = version(sha)
+    tag, build = version(sha)
     check = event_name != "push"
     package = event_name == "workflow_dispatch"
     publish = False
@@ -64,11 +67,15 @@ def main():
     elif event_name == "push" and not event["created"] and not event["deleted"]:
         before = event["before"]
     if before:
-        old = version(before)
+        old, old_build = version(before)
         if event_name == "pull_request":
-            config_files = run("git", "diff", "--name-only", before, sha, "--",
-                               ".github/release", ".github/workflows/project-release.yml")
-            package = bool(config_files) or old != tag
+            if version_key(tag) <= version_key(old):
+                sys.exit(f"Every PR must increase the app version above {old}; found {tag}.")
+            if build <= old_build:
+                sys.exit(f"Every PR must increase the build number above {old_build}; found {build}.")
+            if run("git", "tag", "--list", tag):
+                sys.exit(f"Release tag {tag} already exists. Choose an unused version.")
+            package = True
         elif version_key(tag) > version_key(old):
             number = merged_pr(os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_REF_NAME"], sha)
             if number:
