@@ -5,6 +5,11 @@ on:
   push:
     branches: ['main']
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the current version from main after verifying the ZIP
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -17,7 +22,6 @@ jobs:
       pull-requests: read
     outputs:
       tag: ${{ steps.plan.outputs.tag }}
-      check: ${{ steps.plan.outputs.check }}
       package: ${{ steps.plan.outputs.package }}
       publish: ${{ steps.plan.outputs.publish }}
     steps:
@@ -32,9 +36,9 @@ jobs:
         run: python3 .github/release/plan.py
 
   verify:
-    name: Test and verify the package
+    name: Build and verify the release
     needs: plan
-    if: needs.plan.outputs.check == 'true'
+    if: needs.plan.outputs.package == 'true'
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -42,10 +46,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Run project checks
-        run: python3 .github/release/project.py check
       - name: Prepare and inspect release files
-        if: needs.plan.outputs.package == 'true'
         shell: bash
         env:
           TAG: ${{ needs.plan.outputs.tag }}

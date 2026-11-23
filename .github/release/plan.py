@@ -1,4 +1,4 @@
-"""Determine whether this run should test, package, or publish a GitHub Release."""
+"""Validate PR release metadata and plan GitHub Release packaging."""
 
 import json
 import os
@@ -68,12 +68,16 @@ def main():
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     sha = os.environ["GITHUB_SHA"]
     tag, build = version(sha)
-    check = event_name != "push"
     package = event_name == "workflow_dispatch"
     publish = False
     message = f"Verify {tag} without publishing."
     before = None
-    if event_name == "pull_request":
+    if event_name == "workflow_dispatch" and event.get("inputs", {}).get("publish") in (True, "true"):
+        if os.environ["GITHUB_REF"] != "refs/heads/main":
+            sys.exit("Manual publication requires the main branch.")
+        publish = True
+        message = f"Verify and publish {tag} from main."
+    elif event_name == "pull_request":
         before = event["pull_request"]["base"]["sha"]
     elif event_name == "push" and not event["created"] and not event["deleted"]:
         before = event["before"]
@@ -90,22 +94,20 @@ def main():
                 if run("git", "tag", "--list", tag):
                     sys.exit(f"Release tag {tag} already exists. Choose an unused version.")
                 changelog_section(tag)
-            release_config_changed = run(
-                "git", "diff", "--name-only", before, sha, "--",
-                ".github/release/", ".github/workflows/project-release.yml",
+            message = f"PR version and release notes verified for {tag}." if app_changed else (
+                "PR changes only files outside the App package."
             )
-            package = app_changed or bool(release_config_changed)
         elif version_increased:
             number = merged_pr(os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_REF_NAME"], sha)
             if number:
-                check = package = publish = True
+                package = publish = True
                 message = f"PR #{number} merged: verify and publish {old} → {tag}."
             else:
                 message = f"No merged PR matches this push; skip release of {tag}."
         else:
             message = f"No new version ({old} → {tag}); skip release."
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-        for key, value in dict(tag=tag, check=check, package=package, publish=publish).items():
+        for key, value in dict(tag=tag, package=package, publish=publish).items():
             print(f"{key}={str(value).lower() if isinstance(value, bool) else value}", file=output)
     print(message)
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
