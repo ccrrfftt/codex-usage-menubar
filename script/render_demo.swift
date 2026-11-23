@@ -22,7 +22,7 @@ struct DemoImage {
                 .renderingMode(ring.isLow ? .original : .template)
             VStack(spacing: -4) {
                 Text(percentage).font(.system(size: 10, weight: .medium).monospacedDigit())
-                Text(countdown).font(.system(size: 10, weight: .semibold).monospacedDigit())
+                Text(countdown).font(.system(size: 10).monospacedDigit())
             }
         }
     }

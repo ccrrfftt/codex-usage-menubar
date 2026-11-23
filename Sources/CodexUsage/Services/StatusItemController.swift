@@ -100,7 +100,7 @@ private final class StatusItemContent: NSStackView {
         ring.contentTintColor = .labelColor
         ring.setAccessibilityElement(false)
         percent.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
-        countdown.font = .monospacedDigitSystemFont(ofSize: 10, weight: .semibold)
+        countdown.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
         for label in [percent, countdown] {
             label.alignment = .center
             label.setAccessibilityElement(false)
