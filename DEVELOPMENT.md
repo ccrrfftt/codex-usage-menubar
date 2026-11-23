@@ -74,7 +74,11 @@
 
 在本机运行 `./script/check.sh` 验证 App 改动。指向 `main` 的 PR 在 GitHub 上运行 Ubuntu 的 `plan` 检查，核对版本、构建号、标签和更新记录。文档、测试和 CI 维护的 PR 可以沿用当前版本。
 
+本仓库分支指向 `main` 的正式 PR 通过 `plan` 后，由 **Auto-merge repository PRs** 按分支规则自动合并。草稿标记为 **Ready for review** 后进入同一流程。来自 fork 的 PR 由维护者合并。
+
 App 改动合入 `main` 后，Actions 在 Apple Silicon runner 上从合并提交构建和打包，核验 ZIP 里的版本、签名、架构和 SHA-256，再发布 Git 标签、GitHub Release 与下载附件。正式版通过后更新 Releases 的 Latest 入口。项目测试在本机执行。
+
+由 Actions 自动合并时，**Project Release** 会收到该 PR 的合并提交 SHA，并以这个提交为准决定是否发版。
 
 需要补发 `main` 上已经合入且尚未发布的版本时，在 GitHub Actions 的 **Project Release** 中选择 `main`，开启 **Publish the current version from main after verifying the ZIP** 后运行。默认手动运行只验证打包。若某次发布已经创建了标签或草稿，优先重跑原工作流，沿用原发布提交。
 
